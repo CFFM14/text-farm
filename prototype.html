@@ -642,12 +642,13 @@ const game = {
 // ====== 地形定义 ======
 // 长江中下游平原某地区：河流从左下蜿蜒至中上流出，左上方为河对岸
 // 0=水域, 1=平原(水稻土/潮土), 2=丘陵(黄棕壤), 3=河对岸(未探索)
-const T_NAMES = ['水域','平原','丘陵','对岸'];
+const T_NAMES = ['水域','平原','丘陵','对岸','河床'];
 const T_DEFS = {
   '水域': { char:'水', bg:'bg-water' },
   '平原': { char:'', bg:'bg-plain' },
   '丘陵': { char:'', bg:'bg-hill' },
   '对岸': { char:'', bg:'bg-farshore' },
+  '河床': { char:'', bg:'bg-riverbank' },
 };
 
 // 地形生成：河流从左下(0,11~13)蜿蜒至右上(12~14,0)流出屏幕
@@ -731,16 +732,43 @@ const TERRAIN = (() => {
   return arr;
 })();
 
-// 预计算水距缓存
-const _wDistCache = {};
+// 枯水期地形：复制 TERRAIN，将河流边缘的水域缩为河床
+const TERRAIN_DRY = (() => {
+  const arr = TERRAIN.map(row => [...row]);
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (arr[y][x] !== 0) continue; // 只看水域
+      // 检查4邻域是否有非水域 → 边缘水域在枯水期露出
+      let hasLand = false;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && arr[ny][nx] !== 0) {
+          hasLand = true; break;
+        }
+      }
+      if (hasLand) arr[y][x] = 4; // 边缘水域 → 枯水河床
+    }
+  }
+  return arr;
+})();
+
+// 当前季节地形
+function currentTerrain() {
+  // 冬季 = 枯水期，其他季节 = 丰水期
+  return (game.season === '冬') ? TERRAIN_DRY : TERRAIN;
+}
+
+// 预计算水距缓存（季节切换时清除）
+let _wDistCache = {};
 function waterDistance(x, y) {
   const k = `${x},${y}`;
   if (_wDistCache[k] !== undefined) return _wDistCache[k];
+  const ct = currentTerrain();
   let min = 50;
   for (let dy = -12; dy <= 12; dy++) {
     for (let dx = -12; dx <= 12; dx++) {
       const nx = x + dx, ny = y + dy;
-      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && TERRAIN[ny][nx] === 0) {
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && ct[ny][nx] === 0) {
         min = Math.min(min, Math.abs(dx) + Math.abs(dy));
       }
     }
@@ -1204,6 +1232,21 @@ function terrainData(name, x, y) {
     slope: 0,
     blocked: true
   };
+  if (name === '河床') return {
+    soilType: '枯水河床（沙泥混合）',
+    moisture: Math.round(35 + Math.random() * 20),
+    nitrogen: Math.round(5 + Math.random() * 8),
+    phosphorus: Math.round(2 + Math.random() * 3),
+    potassium: Math.round(10 + Math.random() * 10),
+    fertility: '贫瘠',
+    aeration: '良好',
+    pH: (6.5 + Math.random() * 1.5).toFixed(1),
+    temp: (21 + (game.season==='夏'?5:game.season==='冬'?-8:0) + ((x+y)%6)).toFixed(1),
+    elevation: elevationFor(name, x, y),
+    slope: slopeFor(name, x, y),
+    isRiverbank: true,
+    note: '丰水期被水淹没，枯水期露出。沙泥混合，偶有芦苇。'
+  };
 
   const dist = waterDistance(x, y);
 
@@ -1298,7 +1341,7 @@ function buildMap() {
   for (let y = 0; y < ROWS; y++) {
     const row = [];
     for (let x = 0; x < COLS; x++) {
-      const tName = T_NAMES[TERRAIN[y][x]];
+      const tName = T_NAMES[currentTerrain()[y][x]];
       const tDef = T_DEFS[tName];
       const surface = surfaceAt(x, y, tName);
 
@@ -1365,7 +1408,7 @@ game.map = buildMap();
 function waterFlowAngle(x, y) {
   function isW(ix, iy) {
     if (ix < 0 || ix >= COLS || iy < 0 || iy >= ROWS) return false;
-    return TERRAIN[iy][ix] === 0; // 0=水域
+    return currentTerrain()[iy][ix] === 0;
   }
   const n  = isW(x, y-1), s  = isW(x, y+1), e  = isW(x+1, y), w  = isW(x-1, y);
   const ne = isW(x+1, y-1), se = isW(x+1, y+1), sw = isW(x-1, y+1), nw = isW(x-1, y-1);
@@ -1418,6 +1461,10 @@ function renderMap() {
           div.className = `tile ${bgCls} ${colorCls}`;
         }
         div.style.opacity = '0.5';
+      } else if (tile.terrain === '河床') {
+        colorCls = '';
+        char = '';
+        div.className = `tile bg-riverbank`; // 枯水河床 = 河滩色
       } else {
         // 其他纯地形格：翻耕地背景加深，普通地淡色水印
         colorCls = '';
@@ -2533,14 +2580,25 @@ function feelsLike(temp, humidity) {
 
 function advanceTime(minutes) {
   const prevDay = game.day;
+  const prevSeason = game.season;
   game.timeMin += minutes;
   while (game.timeMin >= 1440) {
     game.timeMin -= 1440;
     game.day++;
     const seasons = ['春', '夏', '秋', '冬'];
-    game.season = seasons[Math.floor((game.day - 1) / 91) % 4];  // 365天/年 ≈ 91天/季
+    game.season = seasons[Math.floor((game.day - 1) / 91) % 4];
   }
-  // 跨天时：先roll天气再跑生长（让当天的雨当天生效）
+  if (game.season !== prevSeason) {
+    _wDistCache = {};
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const tIdx = currentTerrain()[y][x];
+        game.map[y][x].terrain = T_NAMES[tIdx];
+        game.map[y][x].terrainDef = T_DEFS[T_NAMES[tIdx]];
+      }
+    }
+    renderMap();
+  }
   if (game.day !== prevDay || !game.weather) {
     game.weather = rollWeather(game.season);
     game.humidity = calcHumidity();
