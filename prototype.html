@@ -1107,7 +1107,7 @@ function updateMoisture(moisture, x, y) {
 
   // === 降雨补水 ===
   if (w.rain > 0) {
-    moisture += w.rain * 0.35;
+    moisture += w.rain * 0.5;   // 雨水渗透更明显
     return Math.min(100, moisture);
   }
 
@@ -2472,15 +2472,15 @@ function advanceTime(minutes) {
     game.timeMin -= 1440;
     game.day++;
     const seasons = ['春', '夏', '秋', '冬'];
-    game.season = seasons[Math.floor((game.day - 1) / 30) % 4];
+    game.season = seasons[Math.floor((game.day - 1) / 91) % 4];  // 365天/年 ≈ 91天/季
   }
-  if (game.day !== prevDay) updateCropGrowth();
-  const hour = game.timeMin / 60;
-  // 每天凌晨重新roll天气 + 计算湿度（仅跨天时）
+  // 跨天时：先roll天气再跑生长（让当天的雨当天生效）
   if (game.day !== prevDay || !game.weather) {
     game.weather = rollWeather(game.season);
     game.humidity = calcHumidity();
+    updateCropGrowth();
   }
+  const hour = game.timeMin / 60;
   game.temp = calcTemp(hour, game.season);
 }
 
