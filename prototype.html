@@ -1139,6 +1139,25 @@ function getLiveMoisture(tile) {
   return Math.round(Math.max(3, Math.min(100, live)));
 }
 
+// 土壤实时温度：地表比空气有热惯性，滞后约2小时，振幅稍小
+// 临水土壤温度更稳定
+function getLiveSoilTemp(x, y) {
+  const airTemp = parseFloat(game.temp);
+  const lagMinutes = 120;
+  const lagTime = ((game.timeMin - lagMinutes) + 1440) % 1440;
+  const lagHour = lagTime / 60;
+  const [lo, hi] = SEASON_TEMP[game.season] || [10, 25];
+  const amplitude = (hi - lo) / 2;
+  const base = lo + amplitude;
+  const lagAirTemp = base + amplitude * Math.sin((lagHour - 8) / 24 * Math.PI * 2);
+  let soilTemp = lagAirTemp * 0.85 + airTemp * 0.15;
+  // 临水地块温差更小
+  const dist = waterDistance(x, y);
+  if (dist <= 1) soilTemp = soilTemp * 0.75 + airTemp * 0.25;
+  else if (dist <= 3) soilTemp = soilTemp * 0.8 + airTemp * 0.2;
+  return Math.round(soilTemp * 10) / 10;
+}
+
 // 更新土壤湿度（每日蒸发/回润）
 function updateMoisture(moisture, x, y) {
   const wDist = waterDistance(x, y);
@@ -1532,7 +1551,8 @@ function renderCropDetail(tile, x, y) {
       <div class="info-row"><span class="info-label">水分(W)</span><span class="info-value">${calcWaterCoef(getLiveMoisture(tile), d.cropType).toFixed(2)} (湿度${getLiveMoisture(tile)}%)</span></div>
       <div class="info-row"><span class="info-label">肥力(N)</span><span class="info-value">${calcFertilityCoef(d).toFixed(2)}</span></div>
       <div class="info-row"><span class="info-label">翻耕(T)</span><span class="info-value ${tillCls}">${tile.tilled ? '1.00' : '0.70 ' + (tile.tilledCycle ? '('+tile.tilledCycle+'周期)' : '')}</span></div>
-      <div class="info-row"><span class="info-label">温度(R)</span><span class="info-value">${calcTempCoef(parseFloat(game.temp), d.cropType).toFixed(2)} (${game.temp}°C)</span></div>
+      <div class="info-row"><span class="info-label">温度(R)</span><span class="info-value">${calcTempCoef(parseFloat(game.temp), d.cropType).toFixed(2)} (气温${game.temp}°C)</span></div>
+      <div class="info-row"><span class="info-label">土温</span><span class="info-value">${getLiveSoilTemp(x, y)}°C</span></div>
       <div class="info-row"><span class="info-label">健康(H)</span><span class="info-value">${hCoef.toFixed(2)}</span></div>
       <div class="info-row"><span class="info-label">浇水(A)</span><span class="info-value ${waterCls}">${p && p.watered ? '1.50 (已浇)' : '1.00 (未浇)'}</span></div>
     </div>
@@ -1650,7 +1670,8 @@ function renderFieldDetail(tile, x, y) {
       <div class="info-row"><span class="info-label">综合肥力</span><span class="info-value">${d.fertility}</span></div>
       <div class="info-row"><span class="info-label">透气性</span><span class="info-value">${d.aeration}</span></div>
       <div class="info-row"><span class="info-label">pH值</span><span class="info-value">${d.pH}</span></div>
-      <div class="info-row"><span class="info-label">温度</span><span class="info-value">${d.temp}°C</span></div>
+      <div class="info-row"><span class="info-label">气温</span><span class="info-value">${game.temp}°C</span></div>
+      <div class="info-row"><span class="info-label">土温</span><span class="info-value">${getLiveSoilTemp(x, y)}°C</span></div>
     </div>
     <div class="section">
       <div class="section-title">土壤养分</div>
@@ -1780,7 +1801,8 @@ function renderTerrainDetail(tile, x, y) {
       <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
       <div class="info-row"><span class="info-label">土壤类型</span><span class="info-value">${d.soilType}</span></div>
       <div class="info-row"><span class="info-label">肥力</span><span class="info-value">${d.fertility}</span></div>
-      <div class="info-row"><span class="info-label">温度</span><span class="info-value">${d.temp}°C</span></div>
+      <div class="info-row"><span class="info-label">气温</span><span class="info-value">${game.temp}°C</span></div>
+      <div class="info-row"><span class="info-label">土温</span><span class="info-value">${getLiveSoilTemp(x, y)}°C</span></div>
       <div class="info-row"><span class="info-label">pH值</span><span class="info-value">${d.pH}</span></div>
     </div>
     <div class="section">
