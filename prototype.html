@@ -36,6 +36,18 @@
     justify-content: center;
     gap: 8px;
     padding: 12px;
+    position: relative;
+  }
+  #daynight-overlay {
+    position: absolute;
+    top: 12px; left: 50%;
+    transform: translateX(-50%);
+    width: calc(30 * 34px + 8px);
+    height: calc(16 * 34px + 8px);
+    pointer-events: none;
+    border-radius: 4px;
+    transition: background-color 3s ease, opacity 3s ease;
+    z-index: 3;
   }
   #map-grid {
     display: grid;
@@ -468,6 +480,7 @@
   <div id="main">
     <div id="map-area">
       <div id="map-grid"></div>
+      <div id="daynight-overlay"></div>
     </div>
     <div id="panel">
       <div id="status-bar">
@@ -2012,7 +2025,8 @@ function renderStatus() {
   document.getElementById('day-display').textContent = `第${game.day}天 · ${game.season}`;
   const h = Math.floor(game.timeMin / 60);
   const m = game.timeMin % 60;
-  document.getElementById('time-display').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  const dayIcon = game.timeMin < 300 ? '🌙' : game.timeMin < 360 ? '🌅' : game.timeMin < 1080 ? '☀' : game.timeMin < 1140 ? '🌇' : '🌙';
+  document.getElementById('time-display').textContent = `${dayIcon} ${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   document.getElementById('weather-display').textContent = `${weatherIcon(game.weather)} ${weatherLabel(game.weather)}`;
   const feels = feelsLike(game.temp, game.humidity);
   const feelsStr = Math.abs(feels - game.temp) > 1.5 ? ` (体感${feels.toFixed(0)}°)` : '';
@@ -2544,18 +2558,37 @@ document.querySelectorAll('.speed-btn').forEach(btn => {
   });
 });
 
+// ====== 日夜循环视觉 ======
+function updateDayNight() {
+  const m = game.timeMin;
+  const overlay = document.getElementById('daynight-overlay');
+  if (!overlay) return;
+  let opacity, color;
+  if (m < 300)       { opacity = 0.55; color = '#0a1628'; }          // 深夜 0:00-5:00
+  else if (m < 360)  { opacity = 0.55 * (1 - (m-300)/60); color = '#1a1a2e'; } // 黎明 5:00-6:00
+  else if (m < 420)  { opacity = 0; color = '#000'; }                // 清晨 6:00-7:00
+  else if (m < 1080) { opacity = 0; color = '#000'; }                // 白天 7:00-18:00
+  else if (m < 1140) { opacity = 0.55 * (m-1080)/60; color = '#1a0a20'; } // 黄昏 18:00-19:00
+  else if (m < 1380) { opacity = 0.55; color = '#0a1628'; }          // 夜晚 19:00-23:00
+  else               { opacity = 0.55; color = '#0a1628'; }          // 深夜 23:00-24:00
+  overlay.style.backgroundColor = color;
+  overlay.style.opacity = opacity;
+}
+
 // ====== 时间循环 ======
 setInterval(() => {
   if (game.paused || game.speed === 0) return;
   advanceTime(game.speed);
   renderStatus();
   if (game.selected) renderDetail(game.selected.x, game.selected.y);
+  updateDayNight();
 }, 1000);
 
 // ====== 初始化 ======
 renderMap();
 renderStatus();
 renderInventory();
+updateDayNight();
 </script>
 </body>
 </html>
