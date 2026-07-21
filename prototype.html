@@ -596,9 +596,9 @@ function farmSnapshot() {
       const t = game.map[y][x];
       if (t.planted && t.planted.cropType) {
         const cg = CROP_GROWTH[t.planted.cropType];
-        const stage = getCropStage(t.planted.cropType, t.planted.growthDays);
-        const mature = isCropMature(t.planted.cropType, t.planted.growthDays);
-        crops += `- ${cg.name}(${x},${y})，${stage.name}，${mature?'已成熟可收获':'还需约'+Math.ceil(cg.total-t.planted.growthDays)+'天'}，${t.planted.watered?'今日浇过水':'未浇水'}，${t.planted.fertilized?'施过肥':'未施肥'}，土壤${t.data.soilType||'未知'}\n`;
+        const stage = getCropStage(t.planted.cropType, t.planted.growthScore);
+        const mature = isCropMature(t.planted.cropType, t.planted.growthScore);
+        crops += `- ${cg.name}(${x},${y})，${stage.name}，${mature?'已成熟可收获':'还需约'+Math.ceil((cg.total-t.planted.growthScore)/Math.max(0.5,t.planted.history.length?t.planted.history[t.planted.history.length-1].growth:1))+'天'}，${t.planted.watered?'今日浇过水':'未浇水'}，${t.planted.fertilized?'施过肥':'未施肥'}，土壤${t.data.soilType||'未知'}\n`;
       }
     }
   }
@@ -767,6 +767,9 @@ const CROP_GROWTH = {
   rice: {
     char:'稻', name:'水稻', field:'水田',
     total:90, sellPrice:25, yieldBase:120,
+    tempMin: 15, tempMax: 30, tempOpt: 25,  // 适温区间
+    waterLover: true,   // 喜水：高湿度额外加分
+    nutrientUse: { N: 0.8, P: 0.3, K: 0.5 },
     stages: [
       { name:'芽期', max:7, cls:'c-crop-s' },
       { name:'苗期', max:25, cls:'c-crop-s' },
@@ -779,6 +782,10 @@ const CROP_GROWTH = {
   carrot: {
     char:'萝', name:'胡萝卜', field:'旱田',
     total:70, sellPrice:18, yieldBase:100,
+    tempMin: 10, tempMax: 25, tempOpt: 18,
+    waterLover: false,  // 怕涝
+    droughtResist: true, // 耐旱
+    nutrientUse: { N: 0.5, P: 0.6, K: 0.4 },
     stages: [
       { name:'发芽期', max:5, cls:'c-crop-s' },
       { name:'幼苗期', max:15, cls:'c-crop-s' },
@@ -790,6 +797,10 @@ const CROP_GROWTH = {
   wheat: {
     char:'麦', name:'小麦', field:'旱田',
     total:120, sellPrice:22, yieldBase:150,
+    tempMin: 5, tempMax: 25, tempOpt: 18,
+    coldResist: true,    // 耐寒
+    waterLover: false,
+    nutrientUse: { N: 0.7, P: 0.4, K: 0.6 },
     stages: [
       { name:'出苗期', max:7, cls:'c-wheat-s' },
       { name:'分蘖期', max:30, cls:'c-wheat-s' },
@@ -955,19 +966,19 @@ function makeCrop(x, y, cropType, growthDays) {
   };
 }
 
-// 根据生长天数获取当前阶段
-function getCropStage(cropType, growthDays) {
+// 根据生长积分获取当前阶段
+function getCropStage(cropType, score) {
   const cg = CROP_GROWTH[cropType];
   for (const st of cg.stages) {
-    if (growthDays < st.max) return st;
+    if (score < st.max) return st;
   }
-  return cg.stages[cg.stages.length - 1]; // 成熟
+  return cg.stages[cg.stages.length - 1];
 }
 
-// 判断作物是否成熟
-function isCropMature(cropType, growthDays) {
+// 判断作物是否成熟（积分达标）
+function isCropMature(cropType, score) {
   const cg = CROP_GROWTH[cropType];
-  return growthDays >= cg.total;
+  return score >= cg.total;
 }
 
 function makeTree(x, y) {
@@ -1031,6 +1042,71 @@ function makeRoad(x, y) {
       note: '未来扩展新地图的入口'
     }
   };
+}
+
+// ====== 构建地图 ======
+// ====== 生长模拟系数计算 ======
+function calcWaterCoef(moisture, cropType) {
+  const cg = CROP_GROWTH[cropType];
+  if (!cg) return 1.0;
+  let w;
+  if (moisture < 10) w = 0.30;
+  else if (moisture < 25) w = 0.50;
+  else if (moisture < 45) w = 0.80;
+  else if (moisture <= 85) w = 1.00;
+  else if (moisture < 95) w = 0.90;
+  else w = 0.70;
+  // 作物特性修正
+  if (cg.waterLover && moisture >= 85) w = Math.min(1.15, w + 0.15);
+  if (!cg.waterLover && moisture > 85) w = Math.max(0.4, w - 0.2);
+  if (cg.droughtResist && moisture < 45) w = Math.min(1.0, w + 0.1);
+  return Math.round(w * 100) / 100;
+}
+
+function calcFertilityCoef(data) {
+  const nEff = Math.min(1.3, (data.nitrogen || 0) / 60);
+  const pEff = Math.min(1.3, (data.phosphorus || 0) / 45);
+  const kEff = Math.min(1.3, (data.potassium || 0) / 50);
+  return Math.max(0.5, Math.round(((nEff + pEff + kEff) / 3) * 100) / 100);
+}
+
+function calcTempCoef(temp, cropType) {
+  const cg = CROP_GROWTH[cropType];
+  if (!cg) return 1.0;
+  let r;
+  if (temp < cg.tempMin - 10) r = 0.3;
+  else if (temp < cg.tempMin) r = 0.7;
+  else if (temp <= cg.tempMax) {
+    const halfRange = (cg.tempMax - cg.tempMin) / 2;
+    const dist = Math.abs(temp - cg.tempOpt);
+    r = 1.0 + 0.2 * (1.0 - dist / Math.max(halfRange, 1));
+    r = Math.min(1.15, Math.max(0.7, r));
+  } else if (temp <= cg.tempMax + 10) r = 0.7;
+  else r = 0.3;
+  // 作物耐寒
+  if (cg.coldResist && temp < cg.tempMin) r = Math.max(0.5, r);
+  return Math.round(r * 100) / 100;
+}
+
+function calcHealthCoef(tile) {
+  const p = tile.planted;
+  if (!p) return 1.0;
+  const pestH = p.pest < 20 ? 1.0 : p.pest < 50 ? 0.9 : p.pest < 80 ? 0.75 : 0.6;
+  const diseaseH = p.disease < 15 ? 1.0 : p.disease < 40 ? 0.85 : p.disease < 70 ? 0.7 : 0.55;
+  const weedH = p.weeds < 20 ? 1.0 : p.weeds < 45 ? 0.95 : p.weeds < 75 ? 0.8 : 0.7;
+  return Math.max(0.5, Math.round(pestH * diseaseH * weedH * 100) / 100);
+}
+
+// 更新土壤湿度（每日蒸发/回润）
+function updateMoisture(moisture, x, y) {
+  const wDist = waterDistance(x, y);
+  // 蒸发
+  if (game.weather === '雨') moisture += 15;
+  else if (game.weather === '阴') moisture -= 4;
+  else moisture -= 8; // 晴
+  // 地下水位自然回润（临河地块）
+  if (wDist <= 3) moisture += 3;
+  return Math.max(3, Math.min(100, moisture));
 }
 
 // ====== 构建地图 ======
@@ -1182,9 +1258,14 @@ function buildMap() {
         tile.planted = {
           cropType: data.cropType,
           plantedDay: game.day - Math.floor(data.growthDays),
-          growthDays: data.growthDays,
+          growthScore: data.growthDays,  // 初始就有若干积分
           watered: false,
-          fertilized: false
+          fertilized: false,
+          germinated: true,   // 初始作物已经发芽
+          failed: false,
+          history: [],
+          historyAvg: { water: 1.0, fertility: 1.0, temp: 1.0, health: 1.0, days: 0 },
+          pest: 0, disease: 0, weeds: 0
         };
       } else {
         tile.planted = null;
@@ -1344,15 +1425,24 @@ function renderCropDetail(tile, x, y) {
   const d = tile.data;
   const p = tile.planted;
   const cg = CROP_GROWTH[d.cropType];
-  const growthPct = ((d.growthDays / d.totalDays) * 100).toFixed(1);
-  const healthCls = d.health > 80 ? 'good' : d.health > 60 ? 'warn' : 'bad';
-  const pestCls = d.pests === '无' ? 'good' : 'warn';
-  const diseaseCls = d.disease === '无' ? 'good' : 'warn';
-  const weedCls = d.weeds === '无' ? 'good' : d.weeds === '少量' ? 'warn' : 'bad';
-  const remainingDays = Math.max(0, Math.ceil(d.totalDays - d.growthDays));
+  const score = p ? (p.growthScore || 0) : 0;
+  const growthPct = ((score / d.totalDays) * 100).toFixed(1);
+  const pestCls = p && p.pest < 20 ? 'good' : p && p.pest < 50 ? 'warn' : 'bad';
+  const diseaseCls = p && p.disease < 15 ? 'good' : p && p.disease < 40 ? 'warn' : 'bad';
+  const weedCls = p && p.weeds < 20 ? 'good' : p && p.weeds < 45 ? 'warn' : 'bad';
+  const lastGrowth = p && p.history && p.history.length ? p.history[p.history.length-1].growth : 1.0;
+  const remainingScore = Math.max(0, cg.total - score);
+  const estimatedDays = Math.ceil(remainingScore / Math.max(0.3, lastGrowth));
   const waterCls = p && p.watered ? 'good' : 'warn';
   const fertCls = p && p.fertilized ? 'good' : '';
-  const yieldAmount = p && p.fertilized ? Math.floor(cg.yieldBase * 1.3) : cg.yieldBase;
+  const tillCls = tile.tilled ? 'good' : 'bad';
+  // 产量预估
+  const avgF = p && p.historyAvg ? (p.historyAvg.fertility || 1.0) : 1.0;
+  const avgW = p && p.historyAvg ? (p.historyAvg.water || 1.0) : 1.0;
+  const estYield = Math.floor(cg.yieldBase * avgF * avgW * (tile.tilled ? 1.0 : 0.7) * (p && p.fertilized ? 1.3 : 1.0));
+  // 健康系数
+  const hCoef = calcHealthCoef(tile);
+  const healthPct = Math.round(hCoef * 100);
 
   let growthBarCls = 'fill-green';
   if (growthPct >= 100) growthBarCls = 'fill-yellow';
@@ -1362,63 +1452,58 @@ function renderCropDetail(tile, x, y) {
       <div class="section-title">作物详情</div>
       <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
       <div class="info-row"><span class="info-label">作物</span><span class="info-value">${d.cropName}</span></div>
-      <div class="info-row"><span class="info-label">田地类型</span><span class="info-value">${d.field}</span></div>
+      <div class="info-row"><span class="info-label">田地类型</span><span class="info-value">${d.field} ${tile.tilled ? '✅已翻耕' : '❌未翻耕'}</span></div>
       <div class="info-row"><span class="info-label">生长阶段</span><span class="info-value" style="color:#58a6ff;font-weight:bold">${d.stage}</span></div>
-      ${remainingDays > 0 ? `<div class="info-row"><span class="info-label">距成熟</span><span class="info-value" style="color:#d29922">约 ${remainingDays} 天</span></div>` : `<div class="info-row"><span class="info-label">状态</span><span class="info-value good">已成熟，可按 F 收获</span></div>`}
+      ${estimatedDays > 0 ? `<div class="info-row"><span class="info-label">距成熟</span><span class="info-value" style="color:#d29922">约 ${estimatedDays} 天</span></div>` : `<div class="info-row"><span class="info-label">状态</span><span class="info-value good">已成熟，可按 F 收获</span></div>`}
     </div>
 
     <div class="section">
-      <div class="section-title">生长进度</div>
+      <div class="section-title">生长积分</div>
       <div class="bar-row">
-        <span class="bar-label">进度</span>
+        <span class="bar-label">积分</span>
         <div class="bar-bg"><div class="bar-fill ${growthBarCls}" style="width:${Math.min(100, growthPct)}%"></div></div>
-        <span class="bar-text">${Math.floor(d.growthDays)}/${d.totalDays}天 (${growthPct}%)</span>
+        <span class="bar-text">${score.toFixed(1)}/${d.totalDays} (${growthPct}%)</span>
       </div>
+      <div class="info-row"><span class="info-label">昨日积分</span><span class="info-value">${lastGrowth.toFixed(2)}/天</span></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">当前系数</div>
+      <div class="info-row"><span class="info-label">水分(W)</span><span class="info-value">${calcWaterCoef(d.moisture||50, d.cropType).toFixed(2)} (湿度${d.moisture||50}%)</span></div>
+      <div class="info-row"><span class="info-label">肥力(N)</span><span class="info-value">${calcFertilityCoef(d).toFixed(2)}</span></div>
+      <div class="info-row"><span class="info-label">翻耕(T)</span><span class="info-value ${tillCls}">${tile.tilled ? '1.00' : '0.70 ' + (tile.tilledCycle ? '('+tile.tilledCycle+'周期)' : '')}</span></div>
+      <div class="info-row"><span class="info-label">温度(R)</span><span class="info-value">${calcTempCoef(parseFloat(game.temp), d.cropType).toFixed(2)} (${game.temp}°C)</span></div>
+      <div class="info-row"><span class="info-label">健康(H)</span><span class="info-value">${hCoef.toFixed(2)}</span></div>
+      <div class="info-row"><span class="info-label">浇水(A)</span><span class="info-value ${waterCls}">${p && p.watered ? '1.50 (已浇)' : '1.00 (未浇)'}</span></div>
     </div>
 
     <div class="section">
       <div class="section-title">照料状态</div>
       <div class="info-row"><span class="info-label">今日浇水</span><span class="info-value ${waterCls}">${p && p.watered ? '✅ 已浇水' : '❌ 未浇水'}</span></div>
-      <div class="info-row"><span class="info-label">施肥</span><span class="info-value ${fertCls}">${p && p.fertilized ? '✅ 已施肥 (+30%产量)' : '未施肥'}</span></div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">环境信息</div>
-      <div class="info-row"><span class="info-label">温度</span><span class="info-value">${d.temperature}°C ${parseFloat(d.temperature) > 30 ? '(偏高)' : parseFloat(d.temperature) < 10 ? '(偏低)' : '(适宜)'}</span></div>
-      <div class="info-row"><span class="info-label">空气湿度</span><span class="info-value">${d.humidity}%</span></div>
-      <div class="info-row"><span class="info-label">天气</span><span class="info-value">${game.weather}</span></div>
-      <div class="info-row"><span class="info-label">光照</span><span class="info-value">${d.sunlight}</span></div>
-      <div class="info-row"><span class="info-label">土壤类型</span><span class="info-value">${d.soilType}</span></div>
-      <div class="info-row"><span class="info-label">pH值</span><span class="info-value">${d.pH}</span></div>
+      <div class="info-row"><span class="info-label">施肥</span><span class="info-value ${fertCls}">${p && p.fertilized ? '✅ 已施肥' : '未施肥'}</span></div>
     </div>
 
     <div class="section">
       <div class="section-title">土壤养分</div>
-      ${nutrientBar('氮(N)', d.nitrogen, 100)}
-      ${nutrientBar('磷(P)', d.phosphorus, 100)}
-      ${nutrientBar('钾(K)', d.potassium, 100)}
-      ${bar('水分', d.soilMoisture, 100, '%')}
-      <div class="info-row" style="margin-top:4px"><span class="info-label">综合肥力</span><span class="info-value">${d.fertility}</span></div>
-      <div class="info-row"><span class="info-label">透气性</span><span class="info-value">${d.aeration}</span></div>
+      ${nutrientBar('氮(N)', d.nitrogen||30, 100)}
+      ${nutrientBar('磷(P)', d.phosphorus||20, 100)}
+      ${nutrientBar('钾(K)', d.potassium||25, 100)}
+      ${bar('水分', d.moisture||50, 100, '%')}
+      <div class="info-row" style="margin-top:4px"><span class="info-label">土壤类型</span><span class="info-value">${d.soilType||'未知'}</span></div>
     </div>
 
     <div class="section">
-      <div class="section-title">健康状况</div>
-      <div class="info-row"><span class="info-label">虫害</span><span class="info-value ${pestCls}">${d.pests}</span></div>
-      <div class="info-row"><span class="info-label">病害</span><span class="info-value ${diseaseCls}">${d.disease}</span></div>
-      <div class="info-row"><span class="info-label">杂草</span><span class="info-value ${weedCls}">${d.weeds}</span></div>
-      <div class="bar-row" style="margin-top:4px">
-        <span class="bar-label">健康度</span>
-        <div class="bar-bg"><div class="bar-fill ${d.health>80?'fill-green':d.health>60?'fill-yellow':'fill-red'}" style="width:${d.health}%"></div></div>
-        <span class="bar-text">${d.health}%</span>
-      </div>
+      <div class="section-title">病虫害</div>
+      <div class="info-row"><span class="info-label">虫害概率</span><span class="info-value ${pestCls}">${p?p.pest.toFixed(0):'0'}% ${p&&p.pest>=50?'⚠爆发':''}</span></div>
+      <div class="info-row"><span class="info-label">病害概率</span><span class="info-value ${diseaseCls}">${p?p.disease.toFixed(0):'0'}% ${p&&p.disease>=40?'⚠爆发':''}</span></div>
+      <div class="info-row"><span class="info-label">杂草概率</span><span class="info-value ${weedCls}">${p?p.weeds.toFixed(0):'0'}% ${p&&p.weeds>=45?'⚠泛滥':''}</span></div>
+      <div class="info-row" style="margin-top:3px"><span class="info-label">健康系数</span><span class="info-value">${hCoef.toFixed(2)}</span></div>
     </div>
 
     <div class="section">
       <div class="section-title">预测</div>
-      <div class="info-row"><span class="info-label">距收获</span><span class="info-value">约 ${remainingDays} 天</span></div>
-      <div class="info-row"><span class="info-label">预计产量</span><span class="info-value">${yieldAmount}kg</span></div>
-      <div class="info-row"><span class="info-label">品质预估</span><span class="info-value good">${d.quality}</span></div>
+      <div class="info-row"><span class="info-label">距收获</span><span class="info-value">约 ${estimatedDays} 天</span></div>
+      <div class="info-row"><span class="info-label">预计产量</span><span class="info-value">${estYield}kg</span></div>
     </div>
   `;
 }
@@ -1952,11 +2037,14 @@ function interact() {
 
   if (tile.type === 'crop' || (tile.planted && tile.planted.cropType)) {
     const p = tile.planted;
-    if (isCropMature(p.cropType, p.growthDays)) {
+    if (isCropMature(p.cropType, p.growthScore)) {
       harvestCrop(game.player.x, game.player.y);
     } else {
-      const stage = getCropStage(p.cropType, p.growthDays);
-      detailPanel.innerHTML = `<div class="empty-msg" style="color:#d29922">🌱 作物尚未成熟<br>当前阶段：${stage.name}<br>还需约 ${CROP_GROWTH[p.cropType].total - p.growthDays} 天<br><br>按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">R</kbd> 浇水 &nbsp; <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">T</kbd> 施肥</div>`;
+      const stage = getCropStage(p.cropType, p.growthScore);
+      const remaining = Math.max(0, Math.ceil(CROP_GROWTH[p.cropType].total - p.growthScore));
+      const lastGrowth = p.history && p.history.length ? p.history[p.history.length-1].growth : 1.0;
+      const estimatedDays = Math.ceil(remaining / Math.max(0.5, lastGrowth));
+      detailPanel.innerHTML = `<div class="empty-msg" style="color:#d29922">🌱 作物尚未成熟<br>当前阶段：${stage.name}<br>还需约 ${estimatedDays} 天（积分 ${p.growthScore.toFixed(1)}/${CROP_GROWTH[p.cropType].total}）<br><br>按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">R</kbd> 浇水 &nbsp; <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">T</kbd> 施肥</div>`;
     }
   } else if (tile.type === 'field') {
     if (tile.data && tile.data.blocked) {
@@ -2013,6 +2101,7 @@ function tillSoil(tile, detailPanel) {
     return;
   }
   tile.tilled = true;
+  tile.tilledCycle = 3;  // 翻耕持续3个生长周期
   advanceTime(20);
   renderMap();
   detailPanel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🔧 已完成翻耕！<br>土壤疏松透气，适合播种<br><br>按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">1~8</kbd> 切换到种子后按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">F</kbd> 播种</div>`;
@@ -2027,19 +2116,29 @@ function plantSeed(x, y, seedInfo) {
   if (!cg) return;
 
   removeFromInventory(seedInfo.slotIdx, 1);
-  tile.planted = { cropType, plantedDay: game.day, growthDays: 0, watered: false, fertilized: false };
+  tile.planted = {
+    cropType, plantedDay: game.day,
+    growthScore: 0,        // 累积生长积分
+    watered: false,
+    fertilized: false,
+    germinated: tile.tilled,      // 翻耕地直接发芽
+    failed: false,
+    history: [],
+    historyAvg: { water: 1.0, fertility: 1.0, temp: 1.0, health: 1.0, days: 0 },
+    pest: 0, disease: 0, weeds: 0
+  };
   tile.type = 'crop';
   tile.surface = { type:'crop', char:cg.char, colorClass:cg.stages[0].cls, data:{ cropType } };
-  // 保留原有土壤数据，只更新作物相关字段
   tile.data = {
-    ...tile.data, // 保留 soilType, elevation, slope, moisture, N/P/K, pH 等
+    ...tile.data,
     cropType, cropName:cg.name, field:cg.field,
     stage:cg.stages[0].name, growthDays:0, totalDays:cg.total,
     temperature: game.temp, humidity: 50, sunlight: '充足',
     yield: cg.yieldBase + 'kg', quality:'良好',
   };
   const panel = document.getElementById('detail-content');
-  panel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌱 已播种 ${cg.name}！<br>记得按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;color:#8b949e;">R</kbd> 浇水加速生长</div>`;
+  const tillMsg = tile.tilled ? '' : '<br><span style="font-size:11px;color:#f85149">⚠ 未翻耕！种子可能难发芽</span>';
+  panel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌱 已播种 ${cg.name}！<br>记得按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;color:#8b949e;">R</kbd> 浇水加速生长${tillMsg}</div>`;
   renderMap();
   renderInventory();
   advanceTime(10);
@@ -2059,8 +2158,9 @@ function waterAction() {
     return;
   }
   tile.planted.watered = true;
+  tile.data.moisture = Math.min(100, (tile.data.moisture || 50) + 25);
   const panel = document.getElementById('detail-content');
-  panel.innerHTML = `<div class="empty-msg" style="color:#42a5f5">💧 已浇水！<br>今日生长速度 ×1.5</div>`;
+  panel.innerHTML = `<div class="empty-msg" style="color:#42a5f5">💧 已浇水！<br>今日生长速度 ×1.5<br>土壤湿度 +25%</div>`;
   advanceTime(5);
 }
 
@@ -2092,25 +2192,54 @@ function harvestCrop(x, y) {
   if (!p) return;
   const cg = CROP_GROWTH[p.cropType];
   const baseYield = cg.yieldBase;
-  const yieldAmount = p.fertilized ? Math.floor(baseYield * 1.3) : baseYield;
-  const cropId = p.cropType + '_crop';
+  const avgF = p.historyAvg.fertility || 1.0;
+  const avgW = p.historyAvg.water || 1.0;
+  const tillBonus = tile.tilled ? 1.0 : 0.7;
+  const fertBonus = p.fertilized ? 1.3 : 1.0;
+  const rng = 0.9 + Math.random() * 0.2;
+  const yieldAmount = Math.floor(baseYield * avgF * avgW * tillBonus * fertBonus * rng);
 
-  const added = addToInventory({ id:cropId, name:cg.name, icon:cg.char, count:1, color:'#FFD700' });
+  // 品质计算
+  const avgTotal = (avgW + avgF + (p.historyAvg.temp||1) + (p.historyAvg.health||1)) / 4;
+  let quality, priceMultiplier, qualityCls;
+  if (avgTotal >= 1.05) { quality = '特级'; priceMultiplier = 1.5; qualityCls = 'good'; }
+  else if (avgTotal >= 0.85) { quality = '良好'; priceMultiplier = 1.0; qualityCls = 'good'; }
+  else if (avgTotal >= 0.60) { quality = '一般'; priceMultiplier = 0.8; qualityCls = 'warn'; }
+  else { quality = '差'; priceMultiplier = 0.5; qualityCls = 'bad'; }
+
+  const cropId = p.cropType + '_crop';
+  const sellPrice = Math.round(cg.sellPrice * priceMultiplier);
+  const added = addToInventory({
+    id: cropId, name: cg.name, icon: cg.char, count: 1,
+    color: quality === '特级' ? '#FFD700' : quality === '良好' ? '#3fb950' : quality === '一般' ? '#d29922' : '#f85149',
+    quality, sellPrice
+  });
   if (!added) {
     const panel = document.getElementById('detail-content');
     panel.innerHTML = `<div class="empty-msg" style="color:#f85149">背包已满！<br>请先清理背包再来收获</div>`;
     return;
   }
 
-  // 清除作物
+  // 土壤养分消耗30% + 翻耕周期递减
+  tile.data.nitrogen = Math.round(tile.data.nitrogen * 0.7);
+  tile.data.phosphorus = Math.round(tile.data.phosphorus * 0.7);
+  tile.data.potassium = Math.round(tile.data.potassium * 0.7);
+  if (tile.tilledCycle) {
+    tile.tilledCycle--;
+    if (tile.tilledCycle <= 0) tile.tilled = false;
+  }
+
+  const qualityIcon = quality === '特级' ? '⭐' : quality === '良好' ? '✅' : quality === '一般' ? '📦' : '⚠';
+  const panel = document.getElementById('detail-content');
+  panel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌾 收获完成！<br>${cg.name} ${yieldAmount}kg ${qualityIcon}${quality}<br>预计售价 ¥${sellPrice}<br>已放入背包</div>`;
+  aiNarrate('收获', `刚收获了${cg.name}，产量${yieldAmount}kg，品质${quality}，能卖¥${sellPrice}。` + farmSnapshot());
+
+  // 清除作物，恢复地块
   tile.planted = null;
   tile.type = 'field';
   tile.surface = null;
   tile.data = terrainData(tile.terrain, x, y);
 
-  const panel = document.getElementById('detail-content');
-  panel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌾 收获完成！<br>${cg.name} ${yieldAmount}kg<br>已放入背包</div>`;
-  aiNarrate('收获', `刚收获了${cg.name}，产量约${yieldAmount}kg，品质${tile.data.quality||'一般'}。` + farmSnapshot());
   renderMap();
   renderInventory();
   advanceTime(20);
@@ -2121,23 +2250,91 @@ let lastGrowthDay = 0;
 function updateCropGrowth() {
   if (game.day === lastGrowthDay) return;
   lastGrowthDay = game.day;
+
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
       const tile = game.map[y][x];
-      if (!tile.planted || !tile.planted.cropType) continue;
+      if (!tile.planted || !tile.planted.cropType || tile.planted.failed) continue;
       const p = tile.planted;
-      // 浇水的加速
-      p.growthDays += p.watered ? 1.5 : 1;
-      // 每天重置浇水状态
-      p.watered = false;
-      // 更新表面显示颜色
-      const stage = getCropStage(p.cropType, p.growthDays);
-      if (tile.surface) tile.surface.colorClass = stage.cls;
-      // 更新data中的阶段信息
-      if (tile.data) {
-        tile.data.stage = stage.name;
-        tile.data.growthDays = p.growthDays;
+      const cg = CROP_GROWTH[p.cropType];
+      if (!cg) continue;
+
+      // === 1. 发芽判定（未翻耕地，前7天） ===
+      if (!tile.tilled && !p.germinated && game.day - p.plantedDay <= 7) {
+        if (Math.random() < 0.05 * (game.day - p.plantedDay + 1)) {
+          // 发芽失败：种子烂在土里
+          p.failed = true;
+          tile.planted = null;
+          tile.type = 'field';
+          tile.surface = null;
+          tile.data = terrainData(tile.terrain, x, y);
+          continue;
+        }
+        if (game.day - p.plantedDay >= 7) p.germinated = true; // 熬过来就发芽
       }
+
+      // === 2. 更新土壤湿度 ===
+      tile.data.moisture = updateMoisture(tile.data.moisture || 50, x, y);
+
+      // === 3. 更新病虫害概率累积 ===
+      const pestBase = tile.tilled ? 0.3 : 2;
+      const diseaseBase = tile.tilled ? 0.3 : 1;
+      const weedBase = tile.tilled ? 0.3 : 3;
+      // 邻近地块传播加成
+      let neighborBonus = 0;
+      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
+          const nt = game.map[ny][nx];
+          if (nt.planted && nt.planted.pest > 30) neighborBonus += 0.3;
+          if (nt.planted && nt.planted.disease > 30) neighborBonus += 0.3;
+        }
+      }
+      p.pest = Math.min(100, p.pest + pestBase + neighborBonus);
+      p.disease = Math.min(100, p.disease + diseaseBase + neighborBonus);
+      p.weeds = Math.min(100, p.weeds + weedBase);
+
+      // === 4. 计算六维系数 ===
+      const W = calcWaterCoef(tile.data.moisture, p.cropType);
+      const N = calcFertilityCoef(tile.data);
+      const T = tile.tilled ? 1.0 : 0.7;
+      const temp = parseFloat(game.temp);
+      const R = calcTempCoef(isNaN(temp) ? 20 : temp, p.cropType);
+      const H = calcHealthCoef(tile);
+      const A = p.watered ? 1.5 : 1.0;
+
+      // === 5. 累积生长积分 ===
+      const G = Math.round(1.0 * W * N * T * R * H * A * 100) / 100;
+      p.growthScore += G;
+
+      // === 6. 记录历史 ===
+      p.history.push({
+        day: game.day,
+        water: W, fertility: N, temp: R, health: H, waterBonus: A,
+        growth: G, moisture: tile.data.moisture
+      });
+      // 更新历史均值
+      const d = p.history.length;
+      p.historyAvg.days = d;
+      p.historyAvg.water = (p.historyAvg.water * (d - 1) + W) / d;
+      p.historyAvg.fertility = (p.historyAvg.fertility * (d - 1) + N) / d;
+      p.historyAvg.temp = (p.historyAvg.temp * (d - 1) + R) / d;
+      p.historyAvg.health = (p.historyAvg.health * (d - 1) + H) / d;
+
+      // === 7. 养分消耗 ===
+      const nu = cg.nutrientUse;
+      tile.data.nitrogen = Math.max(0, (tile.data.nitrogen || 30) - nu.N);
+      tile.data.phosphorus = Math.max(0, (tile.data.phosphorus || 20) - nu.P);
+      tile.data.potassium = Math.max(0, (tile.data.potassium || 25) - nu.K);
+
+      // === 8. 重置每日状态 ===
+      p.watered = false;
+
+      // === 9. 更新表面颜色和阶段 ===
+      const stage = getCropStage(p.cropType, p.growthScore);
+      if (tile.surface) tile.surface.colorClass = stage.cls;
+      tile.data.stage = stage.name;
+      tile.data.growthDays = p.growthScore;
     }
   }
   renderMap();
