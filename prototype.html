@@ -737,16 +737,16 @@ const TERRAIN_DRY = (() => {
   const arr = TERRAIN.map(row => [...row]);
   for (let y = 0; y < ROWS; y++) {
     for (let x = 0; x < COLS; x++) {
-      if (arr[y][x] !== 0) continue; // 只看水域
-      // 检查4邻域是否有非水域 → 边缘水域在枯水期露出
-      let hasLand = false;
+      if (arr[y][x] !== 0) continue;
+      // 计数4邻域陆地：≥2个陆地邻居 → 窄支流/边缘，枯水期露出
+      let landCount = 0;
       for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
         const nx = x + dx, ny = y + dy;
         if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && arr[ny][nx] !== 0) {
-          hasLand = true; break;
+          landCount++;
         }
       }
-      if (hasLand) arr[y][x] = 4; // 边缘水域 → 枯水河床
+      if (landCount >= 2) arr[y][x] = 4; // 只有窄支流枯水期露出
     }
   }
   return arr;
