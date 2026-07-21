@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>文字农场 - 原型 v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+    background: #0d1117;
+    color: #c9d1d9;
+    font-family: "Cascadia Code", "Sarasa Mono SC", "Microsoft YaHei", "Consolas", monospace;
+    user-select: none;
+  }
+  #game {
+    display: flex;
+    flex-direction: column;
+    width: 100%; height: 100%;
+    background: #161b22;
+  }
+
+  /* ===== 主体：地图 + 面板 ===== */
+  #main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ===== 地图区 ===== */
+  #map-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+  }
+  #map-grid {
+    display: grid;
+    grid-template-columns: repeat(30, 34px);
+    grid-template-rows: repeat(16, 34px);
+    gap: 0;
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    padding: 4px;
+  }
+  .tile {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background 0.1s, transform 0.05s;
+    position: relative;
+  }
+  .tile:hover { background: rgba(255,255,255,0.08) !important; }
+  .tile.selected {
+    box-shadow: inset 0 0 0 2px #58a6ff;
+    z-index: 2;
+  }
+  .tile.player-tile {
+    box-shadow: inset 0 0 0 2px #00e5ff;
+    animation: blink 1.2s infinite;
+  }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+  /* 地形背景色 — 淡色水印，叠加在黑色底上 */
+  .bg-water   { background: rgba(33,150,243,0.10); }  /* 水域 */
+  .bg-plain   { background: rgba(90,130,70,0.03); }    /* 平原 — 极淡 */
+  .bg-mountain{ background: rgba(180,140,70,0.06); }   /* 山地 */
+  .bg-hill    { background: rgba(130,150,55,0.05); }   /* 丘陵 */
+  .bg-basin   { background: rgba(155,120,65,0.06); }   /* 盆地 */
+  .bg-plateau { background: rgba(115,145,165,0.05); }  /* 高原 */
+  /* 表面物也保留背景微调 */
+  .bg-crop    { background: rgba(76,175,80,0.06); }
+  .bg-tree    { background: rgba(27,94,32,0.10); }
+  .bg-shop    { background: rgba(255,152,0,0.08); }
+  .bg-house   { background: rgba(158,158,158,0.08); }
+  .bg-rock    { background: rgba(96,125,139,0.08); }
+
+  .c-water  { color: #42a5f5; }
+  .c-field  { color: #a1887f; }
+  .c-crop-s { color: #8BC34A; } /* seedling */
+  .c-crop-g { color: #4CAF50; } /* growing */
+  .c-crop-m { color: #FFD700; } /* mature */
+  .c-crop-w { color: #a1887f; } /* withered */
+  .c-carrot { color: #FF7043; }
+  .c-wheat-s { color: #8BC34A; }
+  .c-wheat-g { color: #C8B560; }
+  .c-wheat-m { color: #FFD700; }
+  .c-grass  { color: #689F38; }
+  .c-tree   { color: #2E7D32; }
+  .c-shop   { color: #FFB300; }
+  .c-house  { color: #B0BEC5; }
+  .c-rock   { color: #78909C; }
+  .c-player { color: #00e5ff; text-shadow: 0 0 8px rgba(0,229,255,0.5); }
+  .c-terrain { opacity: 0.35; font-size: 15px; color: rgba(255,255,255,0.25); } /* 地形水印 */
+
+  /* ===== 操作提示 ===== */
+  #controls-hint {
+    font-size: 11px;
+    color: #6e7681;
+    text-align: center;
+    line-height: 1.8;
+  }
+  #controls-hint kbd {
+    background: #21262d;
+    border: 1px solid #30363d;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 10px;
+    color: #8b949e;
+  }
+
+  /* ===== 右侧面板 ===== */
+  #panel {
+    width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 13px;
+    padding: 12px 12px 12px 0;
+  }
+
+  /* 状态栏 */
+  #status-bar {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px 14px;
+    flex-shrink: 0;
+  }
+  #status-bar .row1 {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+  }
+  #status-bar .day-info { font-size: 15px; font-weight: bold; color: #e3b341; }
+  #status-bar .time-info { font-size: 14px; color: #8b949e; }
+  #status-bar .row2 {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: #8b949e;
+  }
+  #status-bar .row2 span { display: flex; align-items: center; gap: 3px; }
+  #speed-controls {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .speed-btn {
+    background: #21262d;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    padding: 3px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-family: inherit;
+  }
+  .speed-btn.active { background: #1f6feb; color: #fff; border-color: #388bfd; }
+  .speed-btn:hover { border-color: #58a6ff; }
+
+  /* 详细信息面板 */
+  #detail-panel {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 12px 14px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  #detail-panel::-webkit-scrollbar { width: 6px; }
+  #detail-panel::-webkit-scrollbar-track { background: transparent; }
+  #detail-panel::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+  .section { margin-bottom: 14px; }
+  .section:last-child { margin-bottom: 0; }
+  .section-title {
+    font-size: 11px;
+    color: #6e7681;
+    border-bottom: 1px solid #21262d;
+    padding-bottom: 4px;
+    margin-bottom: 8px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 3px;
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+  .info-label { color: #6e7681; }
+  .info-value { color: #c9d1d9; }
+  .info-value.good { color: #3fb950; }
+  .info-value.warn { color: #d29922; }
+  .info-value.bad  { color: #f85149; }
+
+  /* 进度条 */
+  .bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+  }
+  .bar-label { width: 56px; font-size: 12px; color: #8b949e; text-align: right; }
+  .bar-bg {
+    flex: 1;
+    height: 12px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+  .bar-text { width: 72px; font-size: 11px; color: #8b949e; }
+
+  /* 颜色辅助 */
+  .fill-green  { background: #3fb950; }
+  .fill-yellow { background: #d29922; }
+  .fill-red    { background: #f85149; }
+  .fill-blue   { background: #58a6ff; }
+  .fill-orange { background: #db6d28; }
+
+  /* ===== 底部状态栏 ===== */
+  #bottom-bar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 16px;
+    background: #0d1117;
+    border-top: 1px solid #30363d;
+    flex-shrink: 0;
+  }
+  #bottom-bar .player-stats {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    font-size: 13px;
+    color: #8b949e;
+    flex-shrink: 0;
+  }
+  #bottom-bar .player-stats .stat-val { color: #c9d1d9; font-weight: bold; }
+  #bottom-bar .player-stats .stat-val.good { color: #3fb950; }
+  #bottom-bar .player-stats .stat-val.warn { color: #d29922; }
+
+  /* 背包 */
+  #inventory-area {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  #inventory-area .inv-label {
+    font-size: 12px;
+    color: #6e7681;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  #inventory {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+    flex: 1;
+  }
+  .inv-slot {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 4px;
+    height: 46px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    position: relative;
+  }
+  .inv-slot.empty { color: #30363d; }
+  .inv-slot .count {
+    position: absolute;
+    bottom: 1px;
+    right: 3px;
+    font-size: 10px;
+    color: #8b949e;
+  }
+
+  .empty-msg {
+    text-align: center;
+    color: #484f58;
+    font-size: 13px;
+    padding: 40px 0;
+    line-height: 2;
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <div id="main">
+    <div id="map-area">
+      <div id="map-grid"></div>
+    </div>
+    <div id="panel">
+      <div id="status-bar">
+        <div class="row1">
+          <span class="day-info" id="day-display">第1天 · 春</span>
+          <span class="time-info" id="time-display">08:00</span>
+        </div>
+        <div class="row2">
+          <span id="weather-display">☀ 晴</span>
+          <span id="temp-display">🌡 24.5°C</span>
+        </div>
+        <div id="speed-controls">
+          <button class="speed-btn active" data-speed="1">1x</button>
+          <button class="speed-btn" data-speed="2">2x</button>
+          <button class="speed-btn" data-speed="4">4x</button>
+          <button class="speed-btn" data-speed="8">8x</button>
+          <button class="speed-btn" data-speed="16">16x</button>
+          <button class="speed-btn" data-speed="0">⏸</button>
+        </div>
+      </div>
+      <div id="detail-panel">
+        <div class="empty-msg">点击地图上的任意格子<br>查看详细信息<br><br>使用 WASD 移动角色<br>按 F 与脚下的田地互动</div>
+      </div>
+    </div>
+  </div>
+  <div id="bottom-bar">
+    <div class="player-stats">
+      <span>🍚 饱食度: <span class="stat-val" id="satiety-display">80%</span></span>
+      <span>💰 <span class="stat-val good" id="money-display">¥500</span></span>
+    </div>
+    <div id="inventory-area">
+      <span class="inv-label">背包 (3/8)</span>
+      <div id="inventory"></div>
+    </div>
+    <div id="controls-hint">
+      <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 &nbsp;
+      <kbd>F</kbd> 互动 &nbsp;
+      <kbd>点击</kbd> 查看 &nbsp;
+      <kbd>1</kbd>~<kbd>5</kbd> 调速 &nbsp;
+      <kbd>空格</kbd> 暂停
+    </div>
+  </div>
+</div>
+
+<script>
+// ====== 游戏状态 ======
+const COLS = 30, ROWS = 16;
+const game = {
+  day: 1, season: '春', weather: '晴', temp: 24.5,
+  timeMin: 480, // 8:00
+  speed: 1, paused: false,
+  player: { x: 15, y: 8, satiety: 80, money: 500, facing: 'right' },
+  selected: null,
+  inventory: [
+    { name: '水稻种子', icon: '种', count: 12, color: '#8BC34A' },
+    { name: '胡萝卜种子', icon: '种', count: 8, color: '#FF7043' },
+    { name: '水桶', icon: '桶', count: 1, color: '#42a5f5' },
+    null, null, null, null, null
+  ],
+  map: []
+};
+
+// ====== 地形定义 ======
+// 5=水域 0=山地 1=丘陵 2=盆地 3=高原 4=平原
+const T_NAMES = ['山地','丘陵','盆地','高原','平原','水域'];
+const T_DEFS = {
+  '山地': { char:'山', bg:'bg-mountain' },
+  '丘陵': { char:'丘', bg:'bg-hill' },
+  '盆地': { char:'盆', bg:'bg-basin' },
+  '高原': { char:'原', bg:'bg-plateau' },
+  '平原': { char:'', bg:'bg-plain' },
+  '水域': { char:'水', bg:'bg-water' },
+};
+// 地形网格：不规则湖泊+蜿蜒河流+山地+丘陵+盆地+高原+平原
+const TERRAIN = [
+  [5,5,5,5,5,5,5,0,0,0,0,1,1,1,1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4],
+  [5,5,5,5,5,5,5,0,0,0,0,1,1,1,1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4],
+  [5,5,5,5,5,5,5,0,0,0,0,1,1,1,1,4,4,3,3,3,3,3,3,3,3,3,3,3,4,4],
+  [5,5,5,5,5,5,5,0,0,0,1,1,1,1,4,4,4,3,3,3,3,3,3,3,3,3,3,4,4,4],
+  [5,5,5,5,5,5,5,0,0,0,1,1,1,4,4,4,4,4,3,3,3,3,3,3,3,3,4,4,4,4],
+  [5,5,5,5,5,5,5,0,0,1,1,1,4,4,4,4,4,4,3,3,3,3,3,3,4,4,4,4,4,4],
+  [5,5,5,5,5,5,5,5,5,1,4,4,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4,4,4,4],
+  [5,5,5,5,5,5,1,1,1,1,4,4,4,4,4,4,4,4,4,4,3,3,4,4,4,4,4,4,4,4],
+  [5,5,5,1,1,1,1,1,1,4,4,4,4,4,4,4,4,4,4,4,4,3,4,4,4,4,4,4,4,4],
+  [5,5,5,5,1,1,1,1,1,4,4,4,4,4,4,4,4,4,4,4,4,3,4,4,4,4,4,4,4,4],
+  [5,5,5,5,5,1,1,1,5,4,4,4,4,4,4,4,4,4,4,4,4,4,3,3,4,4,4,4,4,4],
+  [5,5,5,5,5,2,2,5,5,4,4,4,4,4,4,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4],
+  [5,5,5,5,2,2,2,2,5,5,5,5,5,4,4,4,4,4,4,4,4,4,4,3,3,3,4,4,4,4],
+  [5,5,5,5,2,2,2,2,2,5,5,5,5,5,5,5,5,5,4,4,4,4,4,4,3,3,3,3,4,4],
+  [5,5,5,5,5,2,2,2,2,2,5,5,5,5,5,5,5,5,5,5,5,4,4,4,4,3,3,3,3,4],
+  [5,5,5,5,5,5,2,2,2,2,2,5,5,5,5,5,5,5,5,5,5,5,5,4,4,4,3,3,3,3],
+];
+
+// ====== 表面物定义 ======
+// 稀疏表：'x,y' → { type, char, colorClass, data... }
+// type: 'crop'|'tree'|'shop'|'house'|'rock'|'grass'
+function surfaceAt(x, y, terrain) {
+  // 水域和山地大多无表面物
+  if (terrain === '水域') return null;
+
+  // === 树木：分布在山地和丘陵 ===
+  if ((terrain === '山地' || terrain === '丘陵') && y <= 4 && x >= 7 && x <= 12) {
+    if ((x + y) % 3 !== 0) return makeTree(x, y);
+  }
+  if (terrain === '丘陵' && y === 7 && (x === 10 || x === 11)) return makeTree(x, y);
+
+  // === 岩石：山顶 ===
+  if (terrain === '山地' && y <= 2 && (x === 7 || x === 8 || x === 9)) return makeRock(x, y);
+
+  // === 房屋 ===
+  if ((x === 28 || x === 29) && (y === 6 || y === 7)) return makeHouse(x, y);
+
+  // === 商店 ===
+  if (x === 28 && y === 8) return makeShop(x, y);
+
+  // === 水稻：近水平原 ===
+  if (terrain === '平原' && x >= 13 && x <= 17 && y >= 6 && y <= 9) {
+    if (!(x === 15 && y === 8)) return makeCrop(x, y, 'rice');
+  }
+
+  // === 胡萝卜：平原 ===
+  if (terrain === '平原' && x >= 10 && x <= 14 && y >= 10 && y <= 12) {
+    if (!((x === 10 && y === 10) || (x === 14 && y === 12))) return makeCrop(x, y, 'carrot');
+  }
+
+  // === 小麦：平原 ===
+  if (terrain === '平原' && x >= 19 && x <= 23 && y >= 10 && y <= 13) {
+    return makeCrop(x, y, 'wheat');
+  }
+
+  // === 草地：丘陵和部分平原 ===
+  if (terrain === '丘陵' && y >= 11 && y <= 13 && x >= 10 && x <= 12) return makeGrass(x, y);
+  if (terrain === '平原' && y >= 12 && y <= 14 && x >= 24 && x <= 27) return makeGrass(x, y);
+  if (terrain === '盆地' && x >= 4 && x <= 6 && y >= 14 && y <= 15) return makeGrass(x, y);
+
+  return null; // 无表面物 → 显示地形字符
+}
+
+// ====== 表面物工厂 ======
+function makeCrop(x, y, cropType) {
+  const stages = {
+    rice: [
+      { name:'芽期', days:7, total:90, cls:'c-crop-s' },
+      { name:'苗期', days:25, total:90, cls:'c-crop-s' },
+      { name:'分蘖期', days:45, total:90, cls:'c-crop-g' },
+      { name:'拔节期', days:60, total:90, cls:'c-crop-g' },
+      { name:'抽穗期', days:75, total:90, cls:'c-crop-g' },
+      { name:'成熟期', days:88, total:90, cls:'c-crop-m' },
+    ],
+    carrot: [
+      { name:'发芽期', days:5, total:70, cls:'c-crop-s' },
+      { name:'幼苗期', days:15, total:70, cls:'c-crop-s' },
+      { name:'叶丛期', days:35, total:70, cls:'c-crop-g' },
+      { name:'肉质根膨大期', days:55, total:70, cls:'c-crop-g' },
+      { name:'成熟期', days:68, total:70, cls:'c-crop-m' },
+    ],
+    wheat: [
+      { name:'出苗期', days:7, total:120, cls:'c-wheat-s' },
+      { name:'分蘖期', days:30, total:120, cls:'c-wheat-s' },
+      { name:'拔节期', days:55, total:120, cls:'c-wheat-g' },
+      { name:'抽穗期', days:75, total:120, cls:'c-wheat-g' },
+      { name:'灌浆期', days:100, total:120, cls:'c-wheat-g' },
+      { name:'成熟期', days:118, total:120, cls:'c-wheat-m' },
+    ],
+  };
+  const chars = { rice:'稻', carrot:'萝', wheat:'麦' };
+  const names = { rice:'水稻', carrot:'胡萝卜', wheat:'小麦' };
+  const varieties = { rice:'籼稻', carrot:'红芯七寸', wheat:'冬麦' };
+  const fields = { rice:'水田', carrot:'旱田', wheat:'旱田' };
+
+  const stageList = stages[cropType];
+  const idx = ((x + y * 3) % stageList.length);
+  const st = stageList[idx];
+
+  return {
+    type: 'crop', char: chars[cropType], colorClass: st.cls,
+    data: {
+      cropName: names[cropType], variety: varieties[cropType], field: fields[cropType],
+      stage: st.name, stageIdx: idx, growthDays: st.days, totalDays: st.total,
+      temperature: (20 + Math.random() * 8).toFixed(1),
+      humidity: 50 + Math.floor(Math.random() * 35),
+      sunlight: ['充足','充足','一般'][Math.floor(Math.random()*3)],
+      soilType: fields[cropType],
+      soilMoisture: 40 + Math.floor(Math.random() * 50),
+      nitrogen: 30 + Math.floor(Math.random() * 60),
+      phosphorus: 20 + Math.floor(Math.random() * 50),
+      potassium: 15 + Math.floor(Math.random() * 55),
+      fertility: '中等', aeration: '良好',
+      pH: (5.5 + Math.random() * 1.5).toFixed(1),
+      pests: idx === 2 ? '轻度虫害' : '无',
+      disease: '无',
+      weeds: idx === 4 ? '少量' : '无',
+      health: 75 + Math.floor(Math.random() * 24),
+      harvestDate: `第${st.total - st.days + game.day}天`,
+      yield: (100 + Math.floor(Math.random() * 300)) + 'kg',
+      quality: '良好',
+    }
+  };
+}
+
+function makeTree(x, y) {
+  const types = ['橡树','松树','桦树','樟树'];
+  return {
+    type: 'tree', char: '树', colorClass: 'c-tree',
+    data: {
+      treeType: types[(x+y)%4], age: 8 + Math.floor(Math.random()*20),
+      height: (3 + Math.random()*8).toFixed(1),
+      hasFruit: Math.random() > 0.7, fruit: Math.random() > 0.7 ? '野果' : '无',
+      health: 80 + Math.floor(Math.random()*20)
+    }
+  };
+}
+
+function makeShop(x, y) {
+  return {
+    type: 'shop', char: '店', colorClass: 'c-shop',
+    data: {
+      shopName: '乡间小卖部', level: 1,
+      items: ['种子','农具','肥料','水桶','基础食材'],
+      hours: '06:00-22:00', money: '可交易'
+    }
+  };
+}
+
+function makeHouse(x, y) {
+  return {
+    type: 'house', char: '屋', colorClass: 'c-house',
+    data: { houseName:'农舍', rooms:3, hasBed:true, hasStorage:true, restAvailable:'夜晚可休息' }
+  };
+}
+
+function makeRock(x, y) {
+  return {
+    type: 'rock', char: '石', colorClass: 'c-rock',
+    data: { rockType:'花岗岩', canMine:true, hardness:'坚硬' }
+  };
+}
+
+function makeGrass(x, y) {
+  return {
+    type: 'grass', char: '草', colorClass: 'c-grass',
+    data: { overgrowth: ['稀疏','茂密','一般'][(x+y)%3], canClear: true, soilType:'荒地', fertility:'贫瘠' }
+  };
+}
+
+// ====== 构建地图 ======
+function terrainData(name, x, y) {
+  if (name === '水域') return {
+    waterType: '淡水', depth: ['浅','中','深'][x%3],
+    temperature: (16 + (y*0.5) % 4).toFixed(1),
+    fish: (x+y)%3 === 0 ? '有' : '无',
+    flowSpeed: (0.3 + (x%5)*0.1).toFixed(1)
+  };
+  return {
+    soilType: name === '山地' ? '石砾土' : name === '丘陵' ? '黄土' : name === '盆地' ? '淤积土' : name === '高原' ? '红壤' : '壤土',
+    moisture: Math.floor(20 + Math.random() * 40),
+    nitrogen: Math.floor(15 + Math.random() * 30),
+    phosphorus: Math.floor(10 + Math.random() * 25),
+    potassium: Math.floor(10 + Math.random() * 30),
+    fertility: name === '平原' ? '中等' : '贫瘠',
+    aeration: name === '山地' ? '差' : '一般',
+    pH: (5.5 + Math.random() * 2).toFixed(1),
+    temp: (18 + Math.random() * 8).toFixed(1),
+    elevation: elevationFor(name, x, y),
+    slope: slopeFor(name, x, y)
+  };
+}
+
+// 海拔（m）：基于地形类型 + 坐标微调
+function elevationFor(name, x, y) {
+  const ranges = {
+    '平原': [30, 180], '丘陵': [180, 500], '盆地': [100, 300],
+    '高原': [1000, 2800], '山地': [800, 3000]
+  };
+  const [lo, hi] = ranges[name] || [30, 180];
+  const seed = (x * 37 + y * 73) % 100;
+  return lo + Math.floor((hi - lo) * seed / 100);
+}
+
+// 倾角（°）：基于地形类型 + 坐标微调
+function slopeFor(name, x, y) {
+  const ranges = {
+    '平原': [0, 5], '丘陵': [5, 25], '盆地': [0, 10],
+    '高原': [0, 8], '山地': [15, 45]
+  };
+  const [lo, hi] = ranges[name] || [0, 5];
+  const seed = (x * 53 + y * 17) % 100;
+  return lo + Math.floor((hi - lo) * seed / 100);
+}
+
+function buildMap() {
+  const map = [];
+  for (let y = 0; y < ROWS; y++) {
+    const row = [];
+    for (let x = 0; x < COLS; x++) {
+      const tName = T_NAMES[TERRAIN[y][x]];
+      const tDef = T_DEFS[tName];
+      const surface = surfaceAt(x, y, tName);
+      let type, data;
+      if (surface) {
+        type = surface.type;
+        data = surface.data;
+      } else if (tName === '水域') {
+        type = 'water';
+        data = terrainData(tName, x, y);
+      } else if (tName === '山地') {
+        type = 'terrain';
+        data = terrainData(tName, x, y);
+      } else {
+        type = 'field'; // 平原/丘陵/盆地/高原 → 可耕种
+        data = terrainData(tName, x, y);
+      }
+      let walkable;
+      if (tName === '水域') walkable = false;
+      else if (tName === '山地' && !surface) walkable = false;
+      else if (surface && (surface.type === 'tree' || surface.type === 'rock')) walkable = false;
+      else walkable = true; // crops, grass, shops, houses, empty plains/hills/basin/plateau
+      row.push({ terrain: tName, terrainDef: tDef, surface, type, data, walkable });
+    }
+    map.push(row);
+  }
+  return map;
+}
+
+game.map = buildMap();
+
+// ====== 水流方向 ======
+// 根据周围8方向水域邻居分布，计算"水"字的旋转角度
+// "水"字默认(0°) = 上北下南，水向北流
+function waterFlowAngle(x, y) {
+  function isW(ix, iy) {
+    if (ix < 0 || ix >= COLS || iy < 0 || iy >= ROWS) return false;
+    return TERRAIN[iy][ix] === 5;
+  }
+  const n  = isW(x, y-1);
+  const s  = isW(x, y+1);
+  const e  = isW(x+1, y);
+  const w  = isW(x-1, y);
+  const ne = isW(x+1, y-1);
+  const se = isW(x+1, y+1);
+  const sw = isW(x-1, y+1);
+  const nw = isW(x-1, y-1);
+
+  let vx = 0, vy = 0;
+  const D = 0.707; // 对角权重
+  if (n)  vy -= 1;
+  if (s)  vy += 1;
+  if (e)  vx += 1;
+  if (w)  vx -= 1;
+  if (ne) { vx += D; vy -= D; }
+  if (se) { vx += D; vy += D; }
+  if (sw) { vx -= D; vy += D; }
+  if (nw) { vx -= D; vy -= D; }
+
+  if (vx === 0 && vy === 0) return 0;
+  const angle = Math.atan2(vy, vx) * 180 / Math.PI;
+  const deg = (angle + 90 + 360) % 360;
+  // snap 到最近的 45°（8方向：0/45/90/135/180/225/270/315）
+  return Math.round(deg / 45) * 45 % 360;
+}
+
+// ====== 渲染 ======
+function renderMap() {
+  const grid = document.getElementById('map-grid');
+  grid.innerHTML = '';
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const tile = game.map[y][x];
+      const div = document.createElement('div');
+      // 背景色：用地形背景
+      const bgCls = tile.terrainDef.bg;
+      // 表面物：有则显示表面字符和颜色，否则显示地形水印
+      let colorCls, char;
+      if (x === game.player.x && y === game.player.y) {
+        colorCls = 'c-player';
+        char = '人';
+        div.className = `tile ${bgCls} ${colorCls} player-tile`;
+      } else if (tile.surface) {
+        colorCls = tile.surface.colorClass;
+        char = tile.surface.char;
+        div.className = `tile ${bgCls} ${colorCls}`;
+      } else if (tile.terrain === '水域') {
+        // 水域：显示"水"字，按流向旋转（上北下南=向北流=0°）
+        const angle = waterFlowAngle(x, y);
+        colorCls = 'c-water';
+        char = '水';
+        div.className = `tile ${bgCls} ${colorCls}`;
+        div.style.transform = `rotate(${angle}deg)`;
+      } else {
+        // 其他纯地形格：只保留淡色背景水印，不显示文字
+        colorCls = '';
+        char = '';
+        div.className = `tile ${bgCls}`;
+      }
+      div.textContent = char;
+      div.dataset.x = x;
+      div.dataset.y = y;
+
+      if (game.selected && game.selected.x === x && game.selected.y === y) {
+        div.classList.add('selected');
+      }
+
+      div.addEventListener('click', () => selectTile(x, y));
+      grid.appendChild(div);
+    }
+  }
+}
+
+function selectTile(x, y) {
+  game.selected = { x, y };
+  renderMap();
+  renderDetail(x, y);
+}
+
+function renderDetail(x, y) {
+  const panel = document.getElementById('detail-panel');
+  const tile = game.map[y][x];
+
+  // 如果玩家在此格，显示玩家信息
+  if (x === game.player.x && y === game.player.y) {
+    panel.innerHTML = renderPlayerDetail();
+    return;
+  }
+
+  switch (tile.type) {
+    case 'crop':   panel.innerHTML = renderCropDetail(tile, x, y); break;
+    case 'water':  panel.innerHTML = renderWaterDetail(tile, x, y); break;
+    case 'field':  panel.innerHTML = renderFieldDetail(tile, x, y); break;
+    case 'tree':   panel.innerHTML = renderTreeDetail(tile, x, y); break;
+    case 'shop':   panel.innerHTML = renderShopDetail(tile, x, y); break;
+    case 'house':  panel.innerHTML = renderHouseDetail(tile, x, y); break;
+    case 'grass':  panel.innerHTML = renderGrassDetail(tile, x, y); break;
+    case 'rock':   panel.innerHTML = renderRockDetail(tile, x, y); break;
+    case 'terrain':panel.innerHTML = renderTerrainDetail(tile, x, y); break;
+  }
+}
+
+// ====== 详细信息渲染 ======
+function bar(label, value, max, unit, thresholds) {
+  const pct = Math.min(100, (value / max) * 100);
+  let cls = 'fill-green';
+  if (thresholds) {
+    if (pct < thresholds.red) cls = 'fill-red';
+    else if (pct < thresholds.yellow) cls = 'fill-yellow';
+  }
+  let status = '充足';
+  if (pct < 30) status = '严重缺乏';
+  else if (pct < 50) status = '缺乏';
+  else if (pct < 70) status = '一般';
+  else if (pct < 85) status = '良好';
+
+  return `<div class="bar-row">
+    <span class="bar-label">${label}</span>
+    <div class="bar-bg"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div>
+    <span class="bar-text">${value}${unit} ${status}</span>
+  </div>`;
+}
+
+function nutrientBar(label, value, max) {
+  const pct = (value / max) * 100;
+  let cls = 'fill-green', status = '良好';
+  if (pct < 30) { cls = 'fill-red'; status = '严重缺乏'; }
+  else if (pct < 50) { cls = 'fill-yellow'; status = '缺乏'; }
+  else if (pct < 70) { cls = 'fill-yellow'; status = '一般'; }
+  return `<div class="bar-row">
+    <span class="bar-label">${label}</span>
+    <div class="bar-bg"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div>
+    <span class="bar-text">${value}/${max} ${status}</span>
+  </div>`;
+}
+
+function renderCropDetail(tile, x, y) {
+  const d = tile.data;
+  const growthPct = ((d.growthDays / d.totalDays) * 100).toFixed(1);
+  const qualityStr = typeof d.quality === 'function' ? d.quality(d.health) : d.quality;
+  const healthCls = d.health > 80 ? 'good' : d.health > 60 ? 'warn' : 'bad';
+  const pestCls = d.pests === '无' ? 'good' : 'warn';
+  const diseaseCls = d.disease === '无' ? 'good' : 'warn';
+  const weedCls = d.weeds === '无' ? 'good' : d.weeds === '少量' ? 'warn' : 'bad';
+
+  return `
+    <div class="section">
+      <div class="section-title">作物详情</div>
+      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+      <div class="info-row"><span class="info-label">作物</span><span class="info-value">${d.cropName} [${d.variety}]</span></div>
+      <div class="info-row"><span class="info-label">田地类型</span><span class="info-value">${d.field}</span></div>
+      <div class="info-row"><span class="info-label">生长阶段</span><span class="info-value" style="color:#58a6ff;font-weight:bold">${d.stage}</span></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">生长进度</div>
+      <div class="bar-row">
+        <span class="bar-label">进度</span>
+        <div class="bar-bg"><div class="bar-fill fill-green" style="width:${growthPct}%"></div></div>
+        <span class="bar-text">${d.growthDays}/${d.totalDays}天 (${growthPct}%)</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">环境信息</div>
+      <div class="info-row"><span class="info-label">温度</span><span class="info-value">${d.temperature}°C ${parseFloat(d.temperature) > 30 ? '(偏高)' : parseFloat(d.temperature) < 10 ? '(偏低)' : '(适宜)'}</span></div>
+      <div class="info-row"><span class="info-label">空气湿度</span><span class="info-value">${d.humidity}%</span></div>
+      <div class="info-row"><span class="info-label">天气</span><span class="info-value">${game.weather}</span></div>
+      <div class="info-row"><span class="info-label">光照</span><span class="info-value">${d.sunlight}</span></div>
+      <div class="info-row"><span class="info-label">土壤类型</span><span class="info-value">${d.soilType}</span></div>
+      <div class="info-row"><span class="info-label">pH值</span><span class="info-value">${d.pH}</span></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">土壤养分</div>
+      ${nutrientBar('氮(N)', d.nitrogen, 100)}
+      ${nutrientBar('磷(P)', d.phosphorus, 100)}
+      ${nutrientBar('钾(K)', d.potassium, 100)}
+      ${bar('水分', d.soilMoisture, 100, '%')}
+      <div class="info-row" style="margin-top:4px"><span class="info-label">综合肥力</span><span class="info-value">${d.fertility}</span></div>
+      <div class="info-row"><span class="info-label">透气性</span><span class="info-value">${d.aeration}</span></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">健康状况</div>
+      <div class="info-row"><span class="info-label">虫害</span><span class="info-value ${pestCls}">${d.pests}</span></div>
+      <div class="info-row"><span class="info-label">病害</span><span class="info-value ${diseaseCls}">${d.disease}</span></div>
+      <div class="info-row"><span class="info-label">杂草</span><span class="info-value ${weedCls}">${d.weeds}</span></div>
+      <div class="bar-row" style="margin-top:4px">
+        <span class="bar-label">健康度</span>
+        <div class="bar-bg"><div class="bar-fill ${d.health>80?'fill-green':d.health>60?'fill-yellow':'fill-red'}" style="width:${d.health}%"></div></div>
+        <span class="bar-text">${d.health}%</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">预测</div>
+      <div class="info-row"><span class="info-label">预计收获</span><span class="info-value">${d.harvestDate}</span></div>
+      <div class="info-row"><span class="info-label">预计产量</span><span class="info-value">${d.yield}</span></div>
+      <div class="info-row"><span class="info-label">品质预估</span><span class="info-value good">${qualityStr}</span></div>
+    </div>
+  `;
+}
+
+function renderWaterDetail(tile, x, y) {
+  const d = tile.data;
+  return `
+    <div class="section">
+      <div class="section-title">水源信息</div>
+      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+      <div class="info-row"><span class="info-label">类型</span><span class="info-value">${d.waterType}</span></div>
+      <div class="info-row"><span class="info-label">水深</span><span class="info-value">${d.depth}</span></div>
+      <div class="info-row"><span class="info-label">水温</span><span class="info-value">${d.temperature}°C</span></div>
+      <div class="info-row"><span class="info-label">流速</span><span class="info-value">${d.flowSpeed} m/s</span></div>
+      <div class="info-row"><span class="info-label">鱼类</span><span class="info-value">${d.fish}</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">操作</div>
+      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">使用水桶打水 (按 F)</span></div>
+      <div class="info-row"><span class="info-label">备注</span><span class="info-value" style="font-size:11px">水源附近田地地下水丰富，土壤湿度较高</span></div>
+    </div>
+  `;
+}
+
+function renderFieldDetail(tile, x, y) {
+  const d = tile.data;
+  const slopeWarn = d.slope > 15 ? 'bad' : d.slope > 8 ? 'warn' : 'good';
+  return `
+    <div class="section">
+      <div class="section-title">田地信息 — ${tile.terrain}</div>
+      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+      <div class="info-row"><span class="info-label">海拔</span><span class="info-value">${d.elevation}m</span></div>
+      <div class="info-row"><span class="info-label">倾角</span><span class="info-value ${slopeWarn}">${d.slope}° ${d.slope > 15 ? '(过于陡峭)' : d.slope > 8 ? '(略有坡度)' : '(平坦)'}</span></div>
+      <div class="info-row"><span class="info-label">土壤类型</span><span class="info-value">${d.soilType}</span></div>
+      <div class="info-row"><span class="info-label">综合肥力</span><span class="info-value">${d.fertility}</span></div>
+      <div class="info-row"><span class="info-label">透气性</span><span class="info-value">${d.aeration}</span></div>
+      <div class="info-row"><span class="info-label">pH值</span><span class="info-value">${d.pH}</span></div>
+      <div class="info-row"><span class="info-label">温度</span><span class="info-value">${d.temp}°C</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">土壤养分</div>
+      ${nutrientBar('氮(N)', d.nitrogen, 100)}
+      ${nutrientBar('磷(P)', d.phosphorus, 100)}
+      ${nutrientBar('钾(K)', d.potassium, 100)}
+      ${bar('水分', d.moisture, 100, '%')}
+    </div>
+    <div class="section">
+      <div class="section-title">操作</div>
+      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">翻耕 / 播种 (按 F)</span></div>
+      <div class="info-row"><span class="info-label">状态</span><span class="info-value" style="color:#8b949e">空闲田地，可种植作物</span></div>
+    </div>
+  `;
+}
+
+function renderTreeDetail(tile, x, y) {
+  const d = tile.data;
+  return `
+    <div class="section">
+      <div class="section-title">树木信息</div>
+      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+      <div class="info-row"><span class="info-label">树种</span><span class="info-value">${d.treeType}</span></div>
+      <div class="info-row"><span class="info-label">树龄</span><span class="info-value">${d.age}年</span></div>
+      <div class="info-row"><span class="info-label">高度</span><span class="info-value">${d.height}m</span></div>
+      <div class="info-row"><span class="info-label">果实</span><span class="info-value ${d.hasFruit?'good':''}">${d.fruit}</span></div>
+      <div class="info-row"><span class="info-label">健康度</span><span class="info-value">${d.health}%</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">操作</div>
+      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">砍伐 / 采摘 ${d.hasFruit ? '(按 F)' : ''}</span></div>
+    </div>
+  `;
+}
+
+function renderShopDetail(tile, x, y) {
+  const d = tile.data;
+  return `
+    <div class="section">
+      <div class="section-title">商店信息</div>
+      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+      <div class="info-row"><span class="info-label">名称</span><span class="info-value" style="color:#FFB300">${d.shopName}</span></div>
+      <div class="info-row"><span class="info-label">等级</span><span class="info-value">Lv.${d.level}</span></div>
+      <div class="info-row"><span class="info-label">营业时间</span><span class="info-value">${d.hours}</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">在售商品</div>
+      ${d.items.map(item => `<div class="info-row"><span class="info-label">▸</span><span class="info-value">${item}</span></div>`).join('')}
+    </div>
+    <div class="section">
+      <div class="section-title">操作</div>
+      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">进入商店 (按 F)</span></div>
+    </div>
+  `;
+}
+
+function renderHouseDetail(tile, x, y) {
+  const d = tile.data;
+  return `
+    <div class="section">
+      <div class="section-title">房屋信息</div>
+      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+      <div class="info-row"><span class="info-label">名称</span><span class="info-value">${d.houseName}</span></div>
+      <div class="info-row"><span class="info-label">房间数</span><span class="info-value">${d.rooms}间</span></div>
+      <div class="info-row"><span class="info-label">床铺</span><span class="info-value good">${d.hasBed ? '有' : '无'}</span></div>
+      <div class="info-row"><span class="info-label">仓库</span><span class="info-value good">${d.hasStorage ? '有' : '无'}</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">操作</div>
+      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">${d.restAvailable}</span></div>
+    </div>
+  `;
+}
+
+function renderGrassDetail(tile, x, y) {
+  const d = tile.data;
+  return `
+    <div class="section">
+      <div class="section-title">荒地信息</div>
+      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+      <div class="info-row"><span class="info-label">类型</span><span class="info-value">${d.soilType}</span></div>
+      <div class="info-row"><span class="info-label">杂草</span><span class="info-value">${d.overgrowth}</span></div>
+      <div class="info-row"><span class="info-label">肥力</span><span class="info-value warn">${d.fertility}</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">操作</div>
+      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">开垦为田地 (按 F)</span></div>
+      <div class="info-row"><span class="info-label">备注</span><span class="info-value" style="font-size:11px">开垦后肥力低于老田，需长期施肥改良</span></div>
+    </div>
+  `;
+}
+
+function renderRockDetail(tile, x, y) {
+  const d = tile.data;
+  return `
+    <div class="section">
+      <div class="section-title">岩石信息</div>
+      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+      <div class="info-row"><span class="info-label">类型</span><span class="info-value">${d.rockType}</span></div>
+      <div class="info-row"><span class="info-label">硬度</span><span class="info-value">${d.hardness}</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">操作</div>
+      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">开采 (需镐子)</span></div>
+    </div>
+  `;
+}
+
+function renderTerrainDetail(tile, x, y) {
+  const d = tile.data;
+  const tName = tile.terrain;
+  const features = {
+    '山地': '地势高，土壤贫瘠，不可耕种。可采集、伐木。',
+    '丘陵': '起伏地形，土壤一般。可开垦为梯田。',
+    '盆地': '四周高中间低，水源汇集。土壤较肥沃。',
+    '高原': '海拔较高，日照充足。昼夜温差大。',
+  };
+  return `
+    <div class="section">
+      <div class="section-title">地形信息 — ${tName}</div>
+      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+      <div class="info-row"><span class="info-label">土壤类型</span><span class="info-value">${d.soilType}</span></div>
+      <div class="info-row"><span class="info-label">肥力</span><span class="info-value">${d.fertility}</span></div>
+      <div class="info-row"><span class="info-label">温度</span><span class="info-value">${d.temp}°C</span></div>
+      <div class="info-row"><span class="info-label">pH值</span><span class="info-value">${d.pH}</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">土壤养分</div>
+      ${nutrientBar('氮(N)', d.nitrogen, 100)}
+      ${nutrientBar('磷(P)', d.phosphorus, 100)}
+      ${nutrientBar('钾(K)', d.potassium, 100)}
+      ${bar('水分', d.moisture, 100, '%')}
+    </div>
+    <div class="section">
+      <div class="section-title">备注</div>
+      <div class="info-row"><span class="info-label">特征</span><span class="info-value" style="font-size:11px;line-height:1.5">${features[tName] || '平原地形，适合农耕。'}</span></div>
+    </div>
+  `;
+}
+
+function renderPlayerDetail() {
+  const p = game.player;
+  const satCls = p.satiety > 60 ? 'good' : p.satiety > 30 ? 'warn' : 'bad';
+  return `
+    <div class="section">
+      <div class="section-title">玩家信息</div>
+      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${p.x}, ${p.y})</span></div>
+      <div class="info-row"><span class="info-label">朝向</span><span class="info-value">${p.facing}</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">状态</div>
+      <div class="bar-row">
+        <span class="bar-label">饱食度</span>
+        <div class="bar-bg"><div class="bar-fill ${p.satiety>60?'fill-green':p.satiety>30?'fill-yellow':'fill-red'}" style="width:${p.satiety}%"></div></div>
+        <span class="bar-text">${p.satiety}%</span>
+      </div>
+      <div class="info-row"><span class="info-label">金钱</span><span class="info-value" style="color:#3fb950">¥${p.money}</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">操作</div>
+      <div class="info-row"><span class="info-label">脚下</span><span class="info-value">${game.map[p.y][p.x].data.soilType || game.map[p.y][p.x].type}</span></div>
+      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">按 F 与脚下地块互动</span></div>
+    </div>
+  `;
+}
+
+// ====== 玩家状态面板 ======
+function renderInventory() {
+  const inv = document.getElementById('inventory');
+  inv.innerHTML = '';
+  let count = 0;
+  for (let i = 0; i < 8; i++) {
+    const item = game.inventory[i];
+    const slot = document.createElement('div');
+    if (item) {
+      count++;
+      slot.className = 'inv-slot';
+      slot.innerHTML = `<span style="color:${item.color}">${item.icon}</span><span class="count">${item.count}</span>`;
+      slot.title = item.name;
+    } else {
+      slot.className = 'inv-slot empty';
+      slot.textContent = '·';
+    }
+    inv.appendChild(slot);
+  }
+  // 更新背包计数标签
+  const label = document.querySelector('#inventory-area .inv-label');
+  if (label) label.textContent = `背包 (${count}/8)`;
+}
+
+function renderStatus() {
+  document.getElementById('day-display').textContent = `第${game.day}天 · ${game.season}`;
+  const h = Math.floor(game.timeMin / 60);
+  const m = game.timeMin % 60;
+  document.getElementById('time-display').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  document.getElementById('weather-display').textContent = `☀ ${game.weather}`;
+  document.getElementById('temp-display').textContent = `🌡 ${game.temp}°C`;
+  document.getElementById('satiety-display').textContent = `${game.player.satiety}%`;
+  document.getElementById('money-display').textContent = `¥${game.player.money}`;
+  // 更新饱食度颜色
+  const satEl = document.getElementById('satiety-display');
+  satEl.className = 'stat-val ' + (game.player.satiety > 60 ? 'good' : game.player.satiety > 30 ? 'warn' : 'bad');
+}
+
+// ====== 输入处理 ======
+document.addEventListener('keydown', (e) => {
+  const key = e.key.toLowerCase();
+  if (key === 'w') movePlayer(0, -1);
+  else if (key === 's') movePlayer(0, 1);
+  else if (key === 'a') movePlayer(-1, 0);
+  else if (key === 'd') movePlayer(1, 0);
+  else if (key === 'f') interact();
+  else if (key === ' ') { e.preventDefault(); togglePause(); }
+  else if (key >= '1' && key <= '5') {
+    const speeds = [1, 2, 4, 8, 16];
+    setSpeed(speeds[parseInt(key) - 1]);
+  }
+});
+
+function movePlayer(dx, dy) {
+  const nx = game.player.x + dx;
+  const ny = game.player.y + dy;
+  if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) return;
+  if (!game.map[ny][nx].walkable) return;
+  game.player.x = nx;
+  game.player.y = ny;
+  if (dx > 0) game.player.facing = '右';
+  else if (dx < 0) game.player.facing = '左';
+  else if (dy > 0) game.player.facing = '下';
+  else if (dy < 0) game.player.facing = '上';
+  renderMap();
+  renderStatus();
+  if (game.selected) renderDetail(game.selected.x, game.selected.y);
+}
+
+function interact() {
+  const tile = game.map[game.player.y][game.player.x];
+  const detailPanel = document.getElementById('detail-panel');
+
+  if (tile.type === 'field') {
+    // 种植
+    if (game.inventory[0] && game.inventory[0].name.includes('种子')) {
+      detailPanel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌱 已在此处播种${game.inventory[0].name}<br>需定期浇水</div>`;
+      advanceTime(10);
+    } else {
+      detailPanel.innerHTML = `<div class="empty-msg" style="color:#f85149">背包中没有种子！<br>请去商店购买</div>`;
+    }
+  } else if (tile.type === 'water') {
+    detailPanel.innerHTML = `<div class="empty-msg" style="color:#42a5f5">🪣 水桶已装满水！<br>可以去浇灌作物了</div>`;
+    advanceTime(5);
+  } else if (tile.type === 'shop') {
+    detailPanel.innerHTML = `<div class="empty-msg" style="color:#FFB300">🏪 欢迎光临 乡间小卖部<br><br>商品列表：<br>· 水稻种子 ¥5/包<br>· 胡萝卜种子 ¥3/包<br>· 小麦种子 ¥4/包<br>· 水桶 ¥20<br>· 锄头 ¥30<br>· 普通肥料 ¥8<br><br>(商店系统待完善)</div>`;
+    advanceTime(5);
+  } else if (tile.type === 'grass') {
+    detailPanel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌾 已开垦荒地为田地！<br>肥力较低，需施肥改良</div>`;
+    advanceTime(30);
+  } else if (tile.type === 'house') {
+    if (game.timeMin >= 1080 || game.timeMin < 360) {
+      detailPanel.innerHTML = `<div class="empty-msg" style="color:#8b949e">💤 休息中...<br>跳过到第二天早上</div>`;
+      game.day++;
+      game.timeMin = 360;
+      game.player.satiety = Math.min(100, game.player.satiety + 20);
+      renderStatus();
+    } else {
+      detailPanel.innerHTML = `<div class="empty-msg" style="color:#d29922">现在是白天，无法休息<br>夜晚 (18:00后) 才能睡觉</div>`;
+    }
+  } else {
+    selectTile(game.player.x, game.player.y);
+  }
+  game.player.satiety = Math.max(0, game.player.satiety - 0.5);
+  renderStatus();
+}
+
+function advanceTime(minutes) {
+  game.timeMin += minutes;
+  while (game.timeMin >= 1440) {
+    game.timeMin -= 1440;
+    game.day++;
+    // 换季 (简化: 每30天换季)
+    const seasons = ['春', '夏', '秋', '冬'];
+    game.season = seasons[Math.floor((game.day - 1) / 30) % 4];
+  }
+  // 温度随时间变化
+  const hour = game.timeMin / 60;
+  game.temp = (20 + 8 * Math.sin((hour - 6) / 24 * Math.PI * 2)).toFixed(1);
+}
+
+function setSpeed(s) {
+  game.speed = s;
+  game.paused = false;
+  document.querySelectorAll('.speed-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.speed) === s);
+  });
+}
+
+function togglePause() {
+  game.paused = !game.paused;
+  document.querySelectorAll('.speed-btn').forEach(btn => {
+    btn.classList.toggle('active', game.paused ? parseInt(btn.dataset.speed) === 0 : parseInt(btn.dataset.speed) === game.speed);
+  });
+}
+
+document.querySelectorAll('.speed-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const s = parseInt(btn.dataset.speed);
+    if (s === 0) togglePause();
+    else setSpeed(s);
+  });
+});
+
+// ====== 时间循环 ======
+setInterval(() => {
+  if (game.paused || game.speed === 0) return;
+  advanceTime(game.speed);
+  game.player.satiety = Math.max(0, game.player.satiety - 0.01 * game.speed);
+  renderStatus();
+  if (game.selected) renderDetail(game.selected.x, game.selected.y);
+}, 1000);
+
+// ====== 初始化 ======
+renderMap();
+renderStatus();
+renderInventory();
+</script>
+</body>
+</html>
