@@ -90,6 +90,7 @@
   .bg-farshore { background: rgba(60,60,60,0.10); }     /* 河对岸 — 灰暗 */
   .bg-riverbank { background: rgba(180,160,120,0.06); } /* 河滩 — 沙质淡黄 */
   .bg-tilled    { background: rgba(100,80,50,0.08); }    /* 翻耕地 — 土色加深 */
+  .tile.flooded { background: rgba(33,150,243,0.15) !important; } /* 洪水淹没 */
   /* 表面物也保留背景微调 */
   .bg-crop    { background: rgba(76,175,80,0.06); }
   .bg-tree    { background: rgba(27,94,32,0.10); }
@@ -1488,6 +1489,7 @@ function renderMap() {
       div.dataset.x = x;
       div.dataset.y = y;
 
+      if (tile._flooded) div.classList.add('flooded');
       if (game.selected && game.selected.x === x && game.selected.y === y) {
         div.classList.add('selected');
       }
@@ -2592,7 +2594,6 @@ function feelsLike(temp, humidity) {
 
 function advanceTime(minutes) {
   const prevDay = game.day;
-  const prevSeason = game.season;
   game.timeMin += minutes;
   while (game.timeMin >= 1440) {
     game.timeMin -= 1440;
@@ -2600,7 +2601,7 @@ function advanceTime(minutes) {
     const seasons = ['春', '夏', '秋', '冬'];
     game.season = seasons[Math.floor((game.day - 1) / 91) % 4];
   }
-  // 每天更新河流水位 + 刷新地形
+  // 每天更新河流水位 + 刷新地形 + 河漫滩洪水
   if (game.day !== prevDay) {
     const rainToday = game.weather ? game.weather.rain : 0;
     const seasonTrend = { '春':0.15, '夏':0.4, '秋':-0.2, '冬':-0.5 }[game.season] || 0;
@@ -2609,10 +2610,36 @@ function advanceTime(minutes) {
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
         const tIdx = currentTerrainIdx(y, x);
-        game.map[y][x].terrain = T_NAMES[tIdx];
-        game.map[y][x].terrainDef = T_DEFS[T_NAMES[tIdx]];
+        const tName = T_NAMES[tIdx];
+        const tile = game.map[y][x];
+        const oldTerrain = tile.terrain;
+        tile.terrain = tName;
+        tile.terrainDef = T_DEFS[tName];
+        // 水域↔河床切换时更新 type 和 walkable
+        if (tName === '水域' && oldTerrain !== '水域') {
+          tile.type = 'water'; tile.walkable = false;
+        } else if (tName === '河床' && oldTerrain !== '河床') {
+          tile.type = 'field'; tile.walkable = true;
+          if (!tile.planted) tile.data = terrainData(tName, x, y);
+        } else if (oldTerrain === '河床' && tName === '水域') {
+          tile.type = 'water'; tile.walkable = false;
+        }
       }
     }
+    // 河漫滩洪水：riverLevel≥95 且暴雨/台风时，水边1格平原临时变水域
+    const flood = game.riverLevel >= 95 && (game.weather.type === '台风' || game.weather.type === '特大暴雨' || game.weather.type === '大雨');
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const tile = game.map[y][x];
+        const isOnFirstTerrace = tile.terrain === '平原' && !tile.surface && waterDistance(x, y) === 1;
+        tile._flooded = flood && isOnFirstTerrace;
+        if (tile._flooded) {
+          tile.walkable = false;
+          tile.data.floodNote = '河漫滩洪水淹没';
+        }
+      }
+    }
+    renderMap();
   }
   if (game.day !== prevDay || !game.weather) {
     game.weather = rollWeather(game.season);
