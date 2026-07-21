@@ -1098,6 +1098,34 @@ function calcHealthCoef(tile) {
   return Math.max(0.5, Math.round(pestH * diseaseH * weedH * 100) / 100);
 }
 
+// 土壤湿度实时值：基准 + 今日天气效应 × 已过小时比例
+function getLiveMoisture(tile) {
+  const base = tile.data.soilBaseMoisture;
+  if (base === undefined) return tile.data.moisture || 50;
+  const w = game.weather;
+  const hour = game.timeMin / 60;
+  const dayProgress = hour / 24;  // 今天过了多少比例
+  let live = base;
+
+  if (w.rain > 0) {
+    // 降雨随时间累积
+    live += w.rain * 0.5 * dayProgress;
+  } else {
+    // 蒸发随时间累积（用同样的蒸发公式 × 进度）
+    const temp = parseFloat(game.temp);
+    const airHumidity = game.humidity || 50;
+    let evap = 5;
+    evap += (temp - 20) * 0.2;
+    if (w.wind === '疾风' || w.wind === '大风') evap += 3;
+    else if (w.wind === '狂风' || w.wind === '暴风') evap += 5;
+    evap -= (airHumidity - 50) * 0.08;
+    evap -= (w.cloud - 10) * 0.03;
+    evap = Math.max(0.5, evap);
+    live -= evap * dayProgress;
+  }
+  return Math.round(Math.max(3, Math.min(100, live)));
+}
+
 // 更新土壤湿度（每日蒸发/回润）
 function updateMoisture(moisture, x, y) {
   const wDist = waterDistance(x, y);
@@ -1488,7 +1516,7 @@ function renderCropDetail(tile, x, y) {
 
     <div class="section">
       <div class="section-title">当前系数</div>
-      <div class="info-row"><span class="info-label">水分(W)</span><span class="info-value">${calcWaterCoef(d.moisture||50, d.cropType).toFixed(2)} (湿度${d.moisture||50}%)</span></div>
+      <div class="info-row"><span class="info-label">水分(W)</span><span class="info-value">${calcWaterCoef(getLiveMoisture(tile), d.cropType).toFixed(2)} (湿度${getLiveMoisture(tile)}%)</span></div>
       <div class="info-row"><span class="info-label">肥力(N)</span><span class="info-value">${calcFertilityCoef(d).toFixed(2)}</span></div>
       <div class="info-row"><span class="info-label">翻耕(T)</span><span class="info-value ${tillCls}">${tile.tilled ? '1.00' : '0.70 ' + (tile.tilledCycle ? '('+tile.tilledCycle+'周期)' : '')}</span></div>
       <div class="info-row"><span class="info-label">温度(R)</span><span class="info-value">${calcTempCoef(parseFloat(game.temp), d.cropType).toFixed(2)} (${game.temp}°C)</span></div>
@@ -1507,7 +1535,7 @@ function renderCropDetail(tile, x, y) {
       ${nutrientBar('氮(N)', d.nitrogen||30, 100)}
       ${nutrientBar('磷(P)', d.phosphorus||20, 100)}
       ${nutrientBar('钾(K)', d.potassium||25, 100)}
-      ${bar('水分', d.moisture||50, 100, '%')}
+      ${bar('水分', getLiveMoisture(tile), 100, '%')}
       <div class="info-row" style="margin-top:4px"><span class="info-label">土壤类型</span><span class="info-value">${d.soilType||'未知'}</span></div>
     </div>
 
@@ -1579,7 +1607,7 @@ function renderFieldDetail(tile, x, y) {
         ${nutrientBar('氮(N)', d.nitrogen, 100)}
         ${nutrientBar('磷(P)', d.phosphorus, 100)}
         ${nutrientBar('钾(K)', d.potassium, 100)}
-        ${bar('水分', d.moisture, 100, '%', {red:20,yellow:40})}
+        ${bar('水分', getLiveMoisture(tile), 100, '%', {red:20,yellow:40})}
         <div class="info-row" style="margin-top:4px"><span class="info-label">综合肥力</span><span class="info-value" style="color:#f85149">${d.fertility}</span></div>
         <div class="info-row"><span class="info-label">透气性</span><span class="info-value">${d.aeration}</span></div>
         <div class="info-row"><span class="info-label">pH值</span><span class="info-value">${d.pH}</span></div>
@@ -1616,7 +1644,7 @@ function renderFieldDetail(tile, x, y) {
       ${nutrientBar('氮(N)', d.nitrogen, 100)}
       ${nutrientBar('磷(P)', d.phosphorus, 100)}
       ${nutrientBar('钾(K)', d.potassium, 100)}
-      ${bar('水分', d.moisture, 100, '%')}
+      ${bar('水分', getLiveMoisture(tile), 100, '%')}
     </div>
     <div class="section">
       <div class="section-title">操作</div>
@@ -1747,7 +1775,7 @@ function renderTerrainDetail(tile, x, y) {
       ${nutrientBar('氮(N)', d.nitrogen, 100)}
       ${nutrientBar('磷(P)', d.phosphorus, 100)}
       ${nutrientBar('钾(K)', d.potassium, 100)}
-      ${bar('水分', d.moisture, 100, '%')}
+      ${bar('水分', getLiveMoisture(tile), 100, '%')}
     </div>
     <div class="section">
       <div class="section-title">备注</div>
@@ -2285,6 +2313,8 @@ function updateCropGrowth() {
 
       // === 2. 更新土壤湿度 ===
       tile.data.moisture = updateMoisture(tile.data.moisture || 50, x, y);
+      tile.data.soilBaseMoisture = tile.data.moisture;
+      tile.data.soilUpdatedDay = game.day;
 
       // === 3. 更新病虫害概率累积 ===
       const pestBase = tile.tilled ? 0.3 : 2;
