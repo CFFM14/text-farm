@@ -72,12 +72,11 @@
   @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
 
   /* 地形背景色 — 淡色水印，叠加在黑色底上 */
-  .bg-water   { background: rgba(33,150,243,0.10); }  /* 水域 */
-  .bg-plain   { background: rgba(90,130,70,0.03); }    /* 平原 — 极淡 */
-  .bg-mountain{ background: rgba(180,140,70,0.06); }   /* 山地 */
-  .bg-hill    { background: rgba(130,150,55,0.05); }   /* 丘陵 */
-  .bg-basin   { background: rgba(155,120,65,0.06); }   /* 盆地 */
-  .bg-plateau { background: rgba(115,145,165,0.05); }  /* 高原 */
+  .bg-water    { background: rgba(33,150,243,0.10); }  /* 水域 */
+  .bg-plain    { background: rgba(90,130,70,0.03); }    /* 平原 — 极淡 */
+  .bg-hill     { background: rgba(130,150,55,0.05); }   /* 丘陵 */
+  .bg-farshore { background: rgba(60,60,60,0.10); }     /* 河对岸 — 灰暗 */
+  .bg-riverbank { background: rgba(180,160,120,0.06); } /* 河滩 — 沙质淡黄 */
   /* 表面物也保留背景微调 */
   .bg-crop    { background: rgba(76,175,80,0.06); }
   .bg-tree    { background: rgba(27,94,32,0.10); }
@@ -100,6 +99,7 @@
   .c-shop   { color: #FFB300; }
   .c-house  { color: #B0BEC5; }
   .c-rock   { color: #78909C; }
+  .c-farshore { color: rgba(255,255,255,0.15); }
   .c-player { color: #00e5ff; text-shadow: 0 0 8px rgba(0,229,255,0.5); }
   .c-terrain { opacity: 0.35; font-size: 15px; color: rgba(255,255,255,0.25); } /* 地形水印 */
 
@@ -516,7 +516,7 @@ const game = {
   day: 1, season: '春', weather: '晴', temp: 24.5,
   timeMin: 480, // 8:00
   speed: 1, paused: false,
-  player: { x: 15, y: 8, satiety: 80, money: 500, facing: 'right' },
+  player: { x: 14, y: 8, satiety: 80, money: 500, facing: 'right' },
   selected: null,
   selectedSlot: 0,
   shopCart: [],
@@ -530,35 +530,164 @@ const game = {
 };
 
 // ====== 地形定义 ======
-// 5=水域 0=山地 1=丘陵 2=盆地 3=高原 4=平原
-const T_NAMES = ['山地','丘陵','盆地','高原','平原','水域'];
+// 长江中下游平原某地区：河流从左下蜿蜒至中上流出，左上方为河对岸
+// 0=水域, 1=平原(水稻土/潮土), 2=丘陵(黄棕壤), 3=河对岸(未探索)
+const T_NAMES = ['水域','平原','丘陵','对岸'];
 const T_DEFS = {
-  '山地': { char:'山', bg:'bg-mountain' },
-  '丘陵': { char:'丘', bg:'bg-hill' },
-  '盆地': { char:'盆', bg:'bg-basin' },
-  '高原': { char:'原', bg:'bg-plateau' },
-  '平原': { char:'', bg:'bg-plain' },
   '水域': { char:'水', bg:'bg-water' },
+  '平原': { char:'', bg:'bg-plain' },
+  '丘陵': { char:'', bg:'bg-hill' },
+  '对岸': { char:'', bg:'bg-farshore' },
 };
-// 地形网格：不规则湖泊+蜿蜒河流+山地+丘陵+盆地+高原+平原
-const TERRAIN = [
-  [5,5,5,5,5,5,5,0,0,0,0,1,1,1,1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4],
-  [5,5,5,5,5,5,5,0,0,0,0,1,1,1,1,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4],
-  [5,5,5,5,5,5,5,0,0,0,0,1,1,1,1,4,4,3,3,3,3,3,3,3,3,3,3,3,4,4],
-  [5,5,5,5,5,5,5,0,0,0,1,1,1,1,4,4,4,3,3,3,3,3,3,3,3,3,3,4,4,4],
-  [5,5,5,5,5,5,5,0,0,0,1,1,1,4,4,4,4,4,3,3,3,3,3,3,3,3,4,4,4,4],
-  [5,5,5,5,5,5,5,0,0,1,1,1,4,4,4,4,4,4,3,3,3,3,3,3,4,4,4,4,4,4],
-  [5,5,5,5,5,5,5,5,5,1,4,4,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4,4,4,4],
-  [5,5,5,5,5,5,1,1,1,1,4,4,4,4,4,4,4,4,4,4,3,3,4,4,4,4,4,4,4,4],
-  [5,5,5,1,1,1,1,1,1,4,4,4,4,4,4,4,4,4,4,4,4,3,4,4,4,4,4,4,4,4],
-  [5,5,5,5,1,1,1,1,1,4,4,4,4,4,4,4,4,4,4,4,4,3,4,4,4,4,4,4,4,4],
-  [5,5,5,5,5,1,1,1,5,4,4,4,4,4,4,4,4,4,4,4,4,4,3,3,4,4,4,4,4,4],
-  [5,5,5,5,5,2,2,5,5,4,4,4,4,4,4,4,4,4,4,4,4,4,3,3,3,4,4,4,4,4],
-  [5,5,5,5,2,2,2,2,5,5,5,5,5,4,4,4,4,4,4,4,4,4,4,3,3,3,4,4,4,4],
-  [5,5,5,5,2,2,2,2,2,5,5,5,5,5,5,5,5,5,4,4,4,4,4,4,3,3,3,3,4,4],
-  [5,5,5,5,5,2,2,2,2,2,5,5,5,5,5,5,5,5,5,5,5,4,4,4,4,3,3,3,3,4],
-  [5,5,5,5,5,5,2,2,2,2,2,5,5,5,5,5,5,5,5,5,5,5,5,4,4,4,3,3,3,3],
-];
+
+// 地形生成：河流从左下(0,11~13)蜿蜒至右上(12~14,0)流出屏幕
+// 河流必须完整触边，BFS才能正确分离河对岸
+const TERRAIN = (() => {
+  const arr = Array.from({length: ROWS}, () => Array(COLS).fill(1)); // 默认平原
+
+  // 河流核心路径：从(0,12)→(15,0)，含自然蜿蜒
+  const pts = [];
+  for (let i = 0; i <= 26; i++) {
+    const t = i / 26;
+    const x = Math.round(0 + t * 15 + Math.sin(t * Math.PI * 1.5) * 2.0);
+    const y = Math.round(12 - t * 12.3 + Math.cos(t * Math.PI * 1.2) * 0.7);
+    if (x >= 0 && x < COLS && y >= 0 && y < ROWS) {
+      pts.push([x, y]);
+      arr[y][x] = 0;
+    }
+  }
+
+  // 扩宽河流（河宽2-4格）
+  for (const [rx, ry] of pts) {
+    // 基础扩宽（右侧+下方）
+    const baseDirs = [[0,1],[1,0],[1,1]];
+    for (const [dx, dy] of baseDirs) {
+      const nx = rx + dx, ny = ry + dy;
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && arr[ny][nx] === 1) arr[ny][nx] = 0;
+    }
+    // 中下游(y>5)更宽
+    if (ry > 5) {
+      for (const [dx, dy] of [[-1,0],[0,-1],[1,-1]]) {
+        const nx = rx + dx, ny = ry + dy;
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && arr[ny][nx] === 1) arr[ny][nx] = 0;
+      }
+    }
+    // 上游缩窄（顶部只保持1-2格宽）
+    if (ry <= 2) {
+      // 只保留下方+右侧扩宽
+      continue;
+    }
+  }
+
+  // === 确保左边缘出水口 (0, 11~13) ===
+  // 将 col 0-2, row 11-13 全部设为水域，形成喇叭口
+  for (let y = 11; y <= 13; y++) {
+    for (let x = 0; x <= 2; x++) {
+      arr[y][x] = 0;
+    }
+  }
+  // 向下连接，让水流有来源感
+  for (let y = 14; y <= 15; y++) {
+    for (let x = 0; x <= 1; x++) {
+      arr[y][x] = 0;
+    }
+  }
+
+  // === 确保顶部出水口 (12~14, 0) ===
+  for (let x = 12; x <= 14; x++) {
+    for (let y = 0; y <= 1; y++) {
+      arr[y][x] = 0;
+    }
+  }
+  // 向右展开一点
+  if (arr[0][15] !== 0) arr[0][15] = 0;
+
+  // === BFS标记河对岸 ===
+  // 河流触及左边缘(y=11-15)和顶边缘(x=12-15)，形成完整屏障
+  // BFS从(0,0)出发，水域为边界，被河流完全阻断的左上区域=对岸
+  const q = [[0, 0]], seen = new Set(['0,0']);
+  while (q.length) {
+    const [cx, cy] = q.shift();
+    if (arr[cy][cx] === 1) arr[cy][cx] = 3;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = cx + dx, ny = cy + dy;
+      const k = `${nx},${ny}`;
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !seen.has(k) && arr[ny][nx] !== 0) {
+        seen.add(k); q.push([nx, ny]);
+      }
+    }
+  }
+
+  // 右侧上部放丘陵（长江中下游偶有低丘，仅限玩家侧）
+  for (let y = 0; y < 7; y++) {
+    for (let x = 22; x < COLS; x++) {
+      if (arr[y][x] === 1) arr[y][x] = 2;
+    }
+  }
+
+  return arr;
+})();
+
+// 预计算水距缓存
+const _wDistCache = {};
+function waterDistance(x, y) {
+  const k = `${x},${y}`;
+  if (_wDistCache[k] !== undefined) return _wDistCache[k];
+  let min = 50;
+  for (let dy = -12; dy <= 12; dy++) {
+    for (let dx = -12; dx <= 12; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && TERRAIN[ny][nx] === 0) {
+        min = Math.min(min, Math.abs(dx) + Math.abs(dy));
+      }
+    }
+  }
+  _wDistCache[k] = min;
+  return min;
+}
+
+// 预扫描渡桥位置：找到河流最窄处（约2格宽）
+function findBridgeSpot() {
+  for (let y = 3; y <= 10; y++) {
+    let waterStart = -1, waterEnd = -1;
+    for (let x = 0; x < COLS; x++) {
+      if (TERRAIN[y][x] === 0) {
+        if (waterStart === -1) waterStart = x;
+        waterEnd = x;
+      }
+    }
+    if (waterStart >= 0 && waterEnd - waterStart <= 2) {
+      // 检查两岸是否都有陆地
+      const leftBank = waterStart - 1;
+      const rightBank = waterEnd + 1;
+      if (leftBank >= 0 && rightBank < COLS &&
+          TERRAIN[y][leftBank] !== 0 && TERRAIN[y][rightBank] !== 0) {
+        // 返回完整的水域列范围
+        const waterCols = [];
+        for (let wx = waterStart; wx <= waterEnd; wx++) waterCols.push(wx);
+        return { y, waterCols };
+      }
+      }
+    }
+  }
+  return null; // 没找到合适位置
+}
+
+const BRIDGE_SPOT = findBridgeSpot();
+
+// 计算到最近水域的距离（曼哈顿距离）
+function waterDistance(x, y) {
+  let min = 50;
+  for (let dy = -12; dy <= 12; dy++) {
+    for (let dx = -12; dx <= 12; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && TERRAIN[ny][nx] === 0) {
+        min = Math.min(min, Math.abs(dx) + Math.abs(dy));
+      }
+    }
+  }
+  return min;
+}
 
 // ====== 商店商品 ======
 const SHOP_ITEMS = [
@@ -668,48 +797,61 @@ function hasAnySeed() {
 }
 
 // ====== 表面物定义 ======
-// 稀疏表：'x,y' → { type, char, colorClass, data... }
-// type: 'crop'|'tree'|'shop'|'house'|'rock'|'grass'
 function surfaceAt(x, y, terrain) {
-  // 水域和山地大多无表面物
-  if (terrain === '水域') return null;
-
-  // === 树木：分布在山地和丘陵 ===
-  if ((terrain === '山地' || terrain === '丘陵') && y <= 4 && x >= 7 && x <= 12) {
-    if ((x + y) % 3 !== 0) return makeTree(x, y);
+  if (terrain === '水域') {
+    // 渡桥：在桥位的水域格上放置桥面
+    if (BRIDGE_SPOT && y === BRIDGE_SPOT.y && BRIDGE_SPOT.waterCols.includes(x)) {
+      return makeBridge(x, y);
+    }
+    return null;
   }
-  if (terrain === '丘陵' && y === 7 && (x === 10 || x === 11)) return makeTree(x, y);
 
-  // === 岩石：山顶 ===
-  if (terrain === '山地' && y <= 2 && (x === 7 || x === 8 || x === 9)) return makeRock(x, y);
+  const wDist = waterDistance(x, y);
 
-  // === 房屋 ===
-  if ((x === 28 || x === 29) && (y === 6 || y === 7)) return makeHouse(x, y);
+  // 河对岸：远处有树（距水≥3格），近河处为空
+  if (terrain === '对岸') {
+    if (wDist >= 3 && y <= 5 && x >= 2 && x <= 14 && (x + y) % 3 !== 0) return makeTree(x, y);
+    if (wDist === 1 && (x + y) % 4 === 0 && y >= 3) return makeGrass(x, y);
+    return null;
+  }
+
+  // === 河滩（水边1格）：只长草，不长树！ ===
+  if (wDist === 1 && terrain === '平原') {
+    if ((x + y) % 4 === 0 && y >= 4) return makeGrass(x, y);
+    return null; // 河滩大部分为空地/沙地
+  }
+
+  // === 房屋（右下方小村，玩家侧）===
+  if ((x === 27 || x === 28) && (y === 12 || y === 13) && terrain === '平原') return makeHouse(x, y);
 
   // === 商店 ===
-  if (x === 28 && y === 8) return makeShop(x, y);
+  if (x === 27 && y === 14 && terrain === '平原') return makeShop(x, y);
 
-  // === 水稻：近水平原 ===
-  if (terrain === '平原' && x >= 13 && x <= 17 && y >= 6 && y <= 9) {
-    if (!(x === 15 && y === 8)) return makeCrop(x, y, 'rice');
+  // === 景观树：田中间一棵（平原耕地中罕见的孤树）===
+  if (x === 22 && y === 8 && terrain === '平原' && wDist >= 3) return makeTree(x, y);
+
+  // === 丘陵树木 ===
+  if (terrain === '丘陵' && y <= 6 && (x + y) % 3 !== 0 && wDist >= 2) return makeTree(x, y);
+
+  // === 水稻田：近河平原（距水2-5格，避开水边河滩）===
+  if (terrain === '平原' && x >= 10 && x <= 22 && y >= 4 && y <= 11) {
+    if (wDist >= 2 && wDist <= 5 && !(x === 16 && y === 8) && !(x === 14 && y === 8)) return makeCrop(x, y, 'rice');
   }
 
-  // === 胡萝卜：平原 ===
-  if (terrain === '平原' && x >= 10 && x <= 14 && y >= 10 && y <= 12) {
-    if (!((x === 10 && y === 10) || (x === 14 && y === 12))) return makeCrop(x, y, 'carrot');
+  // === 胡萝卜：离河中等距离 ===
+  if (terrain === '平原' && x >= 15 && x <= 25 && y >= 11 && y <= 15) {
+    if (wDist >= 3 && wDist <= 8) return makeCrop(x, y, 'carrot');
   }
 
-  // === 小麦：平原 ===
-  if (terrain === '平原' && x >= 19 && x <= 23 && y >= 10 && y <= 13) {
-    return makeCrop(x, y, 'wheat');
+  // === 小麦：远离河的平原 ===
+  if (terrain === '平原' && x >= 22 && x <= 29 && y >= 5 && y <= 12) {
+    if (wDist >= 3) return makeCrop(x, y, 'wheat');
   }
 
-  // === 草地：丘陵和部分平原 ===
-  if (terrain === '丘陵' && y >= 11 && y <= 13 && x >= 10 && x <= 12) return makeGrass(x, y);
-  if (terrain === '平原' && y >= 12 && y <= 14 && x >= 24 && x <= 27) return makeGrass(x, y);
-  if (terrain === '盆地' && x >= 4 && x <= 6 && y >= 14 && y <= 15) return makeGrass(x, y);
+  // === 草地：河岸以上过渡带 ===
+  if (terrain === '平原' && wDist === 2 && y >= 4 && (x + y) % 3 === 0 && x <= 8) return makeGrass(x, y);
 
-  return null; // 无表面物 → 显示地形字符
+  return null;
 }
 
 // ====== 表面物工厂 ======
@@ -814,9 +956,27 @@ function makeRock(x, y) {
 }
 
 function makeGrass(x, y) {
+  const wDist = waterDistance(x, y);
+  const isBank = wDist === 1;
   return {
     type: 'grass', char: '草', colorClass: 'c-grass',
-    data: { overgrowth: ['稀疏','茂密','一般'][(x+y)%3], canClear: true, soilType:'荒地', fertility:'贫瘠' }
+    data: {
+      overgrowth: isBank ? '芦苇丛' : ['稀疏','茂密','一般'][(x+y)%3],
+      canClear: true,
+      soilType: isBank ? '河滩土' : '荒地',
+      fertility: isBank ? '极贫瘠（沙质）' : '贫瘠'
+    }
+  };
+}
+
+function makeBridge(x, y) {
+  return {
+    type: 'bridge', char: '桥', colorClass: 'c-house',
+    data: {
+      bridgeType: '木桥',
+      connectsBank: true,
+      canCross: true
+    }
   };
 }
 
@@ -824,45 +984,105 @@ function makeGrass(x, y) {
 function terrainData(name, x, y) {
   if (name === '水域') return {
     waterType: '淡水', depth: ['浅','中','深'][x%3],
-    temperature: (16 + (y*0.5) % 4).toFixed(1),
+    temperature: (18 + (game.season==='夏'?4:game.season==='冬'?-6:0)).toFixed(1),
     fish: (x+y)%3 === 0 ? '有' : '无',
     flowSpeed: (0.3 + (x%5)*0.1).toFixed(1)
   };
+  if (name === '对岸') return {
+    soilType: '未知', moisture: 50, nitrogen: 40, phosphorus: 30, potassium: 35,
+    fertility: '未知', aeration: '未知', pH: '?',
+    temp: (18 + Math.random() * 5).toFixed(1),
+    elevation: elevationFor(name, x, y),
+    slope: 0,
+    blocked: true
+  };
+
+  const dist = waterDistance(x, y);
+
+  // === 河滩土（距水1格）：沙质潮土，贫瘠，透水性强 ===
+  if (dist === 1 && name === '平原') {
+    const seed = ((x * 37 + y * 73) % 100) / 100;
+    return {
+      soilType: '河滩土（沙质潮土）',
+      moisture: Math.round(20 + seed * 25),        // 透水性强，保不住水
+      nitrogen: Math.round(3 + seed * 8),           // 极贫瘠（有机质~1.05%）
+      phosphorus: Math.round(1 + seed * 4),         // 速效磷极低（~3ppm）
+      potassium: Math.round(8 + seed * 15),         // 保肥能力差
+      fertility: '贫瘠',
+      aeration: '极好（沙质）',
+      pH: (6.5 + seed * 1.5).toFixed(1),            // 中性至微碱性
+      temp: (21 + (game.season==='夏'?5:game.season==='冬'?-8:0) + ((x+y)%6)).toFixed(1),
+      elevation: elevationFor(name, x, y),
+      slope: slopeFor(name, x, y),
+      isRiverbank: true,
+      sandContent: '85-95%',
+      organicMatter: '1.05%',
+      note: '丰水期被淹、枯水期露出。沙粒含量极高，保水保肥差。只长芦苇、荻草等草本植物。'
+    };
+  }
+
+  // 土壤类型：近河=潮土，平原=水稻土，丘陵=黄棕壤
+  let soilType;
+  if (name === '丘陵') { soilType = '黄棕壤'; }
+  else if (dist <= 3) { soilType = '潮土'; }
+  else { soilType = '水稻土'; }
+
+  // 水分：近水湿润，远水干燥
+  const moisture = Math.min(95, Math.max(10, Math.round(88 - dist * 10 + ((x*7+y*13)%10) - 5)));
+
+  // pH范围：水稻土5.5-7.0，潮土6.5-8.0，黄棕壤5.0-6.5
+  const phr = { '水稻土':[5.5,7.0], '潮土':[6.5,8.0], '黄棕壤':[5.0,6.5] };
+  const [plo, phi] = phr[soilType];
+  const seed = ((x * 37 + y * 73) % 100) / 100;
+
   return {
-    soilType: name === '山地' ? '石砾土' : name === '丘陵' ? '黄土' : name === '盆地' ? '淤积土' : name === '高原' ? '红壤' : '壤土',
-    moisture: Math.floor(20 + Math.random() * 40),
-    nitrogen: Math.floor(15 + Math.random() * 30),
-    phosphorus: Math.floor(10 + Math.random() * 25),
-    potassium: Math.floor(10 + Math.random() * 30),
-    fertility: name === '平原' ? '中等' : '贫瘠',
-    aeration: name === '山地' ? '差' : '一般',
-    pH: (5.5 + Math.random() * 2).toFixed(1),
-    temp: (18 + Math.random() * 8).toFixed(1),
+    soilType, moisture,
+    nitrogen: Math.round(35 + (60 - dist * 5) * seed),
+    phosphorus: Math.round(25 + (45 - dist * 3.5) * ((x*53+y*17)%100)/100),
+    potassium: Math.round(28 + (50 - dist * 4) * ((x*19+y*43)%100)/100),
+    fertility: dist <= 2 ? '肥沃' : dist <= 5 ? '中等' : '一般',
+    aeration: soilType === '潮土' ? '良好' : '一般',
+    pH: (plo + (phi - plo) * seed).toFixed(1),
+    temp: (21 + (game.season==='夏'?5:game.season==='冬'?-8:0) + ((x+y)%6)).toFixed(1),
     elevation: elevationFor(name, x, y),
     slope: slopeFor(name, x, y)
   };
 }
 
-// 海拔（m）：基于地形类型 + 坐标微调
+// 缓存海拔，避免重复计算（同一坐标值不变）
+const _elevCache = {};
 function elevationFor(name, x, y) {
-  const ranges = {
-    '平原': [30, 180], '丘陵': [180, 500], '盆地': [100, 300],
-    '高原': [1000, 2800], '山地': [800, 3000]
-  };
-  const [lo, hi] = ranges[name] || [30, 180];
-  const seed = (x * 37 + y * 73) % 100;
-  return lo + Math.floor((hi - lo) * seed / 100);
+  const k = `${x},${y}`;
+  if (_elevCache[k] !== undefined) return _elevCache[k];
+
+  if (name === '水域') { _elevCache[k] = 20 + ((x+y)%10)*0.3; return _elevCache[k]; }
+  if (name === '对岸') { _elevCache[k] = 27 + ((x+y)%8)*0.3; return _elevCache[k]; }
+
+  // 平原/丘陵：基准28m，距水每远1m约升0.35m + 极小随机<0.3m
+  const dist = waterDistance(x, y);
+  let base = 27.5 + dist * 0.35;
+  if (name === '丘陵') base = 50 + (dist * 0.35) + ((x*7+y*13)%60);
+  const micro = ((x * 37 + y * 73) % 100) / 330; // <0.30m
+  const val = Math.round((base + micro) * 10) / 10;
+  _elevCache[k] = val;
+  return val;
 }
 
-// 倾角（°）：基于地形类型 + 坐标微调
+// 坡度：取与8邻格最大高差(米)，转为度数
 function slopeFor(name, x, y) {
-  const ranges = {
-    '平原': [0, 5], '丘陵': [5, 25], '盆地': [0, 10],
-    '高原': [0, 8], '山地': [15, 45]
-  };
-  const [lo, hi] = ranges[name] || [0, 5];
-  const seed = (x * 53 + y * 17) % 100;
-  return lo + Math.floor((hi - lo) * seed / 100);
+  if (name === '水域' || name === '对岸') return 0;
+  const myH = elevationFor(name, x, y);
+  let maxD = 0;
+  for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[1,-1],[-1,1],[-1,-1]]) {
+    const nx = x + dx, ny = y + dy;
+    if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
+    const nName = T_NAMES[TERRAIN[ny][nx]];
+    if (nName === '水域') continue;
+    const diff = Math.abs(myH - elevationFor(nName, nx, ny));
+    if (diff > maxD) maxD = diff;
+  }
+  // 简化：1m高差/30m格距 ≈ 1.9°，直接四舍五入
+  return Math.round(Math.atan(maxD / 30) * 180 / Math.PI * 10) / 10;
 }
 
 function buildMap() {
@@ -873,6 +1093,11 @@ function buildMap() {
       const tName = T_NAMES[TERRAIN[y][x]];
       const tDef = T_DEFS[tName];
       const surface = surfaceAt(x, y, tName);
+
+      // 河滩背景：距水1格的平原/对岸
+      const wDist = waterDistance(x, y);
+      const isRiverbank = (tName === '平原' || tName === '对岸') && wDist === 1;
+
       let type, data;
       if (surface) {
         type = surface.type;
@@ -880,20 +1105,25 @@ function buildMap() {
       } else if (tName === '水域') {
         type = 'water';
         data = terrainData(tName, x, y);
-      } else if (tName === '山地') {
-        type = 'terrain';
+      } else if (tName === '对岸') {
+        type = 'field';
         data = terrainData(tName, x, y);
       } else {
-        type = 'field'; // 平原/丘陵/盆地/高原 → 可耕种
+        type = 'field';
         data = terrainData(tName, x, y);
       }
-      let walkable;
-      if (tName === '水域') walkable = false;
-      else if (tName === '山地' && !surface) walkable = false;
-      else if (surface && (surface.type === 'tree' || surface.type === 'rock')) walkable = false;
-      else walkable = true; // crops, grass, shops, houses, empty plains/hills/basin/plateau
 
-      const tile = { terrain: tName, terrainDef: tDef, surface, type, data, walkable };
+      let walkable;
+      if (type === 'bridge') walkable = true;  // 桥可通行
+      else if (tName === '水域') walkable = false;
+      else if (tName === '对岸') walkable = false;
+      else if (surface && surface.type === 'rock') walkable = false;
+      else walkable = true;
+
+      const tile = {
+        terrain: tName, terrainDef: tDef, surface, type, data, walkable,
+        isRiverbank
+      };
 
       // 初始作物：存入 planted 动态数据
       if (surface && surface.type === 'crop' && data.cropType) {
@@ -917,38 +1147,66 @@ function buildMap() {
 
 game.map = buildMap();
 
+// 桥头堡：让桥两端相邻的对岸格可通行（过桥落脚点）
+if (BRIDGE_SPOT) {
+  const by = BRIDGE_SPOT.y;
+  const leftCol = BRIDGE_SPOT.waterCols[0] - 1;
+  const rightCol = BRIDGE_SPOT.waterCols[BRIDGE_SPOT.waterCols.length - 1] + 1;
+
+  // 左桥头（对岸侧）
+  if (leftCol >= 0 && by >= 0 && by < ROWS) {
+    const leftTile = game.map[by][leftCol];
+    if (leftTile && leftTile.terrain === '对岸') {
+      leftTile.walkable = true;
+      leftTile.data.blocked = false;
+      leftTile._bridgeHead = true;
+    }
+  }
+  // 右桥头（玩家侧）—— 应该已经是 walkable 的
+  if (rightCol < COLS && by >= 0 && by < ROWS) {
+    const rightTile = game.map[by][rightCol];
+    if (rightTile && rightTile.terrain === '对岸') {
+      rightTile.walkable = true;
+      rightTile.data.blocked = false;
+      rightTile._bridgeHead = true;
+    }
+  }
+  // 上下邻格也设为可走（方便从桥上下到对岸）
+  for (const dy of [-1, 1]) {
+    for (const col of [leftCol]) {
+      const ny = by + dy;
+      if (ny >= 0 && ny < ROWS && col >= 0 && col < COLS) {
+        const tile = game.map[ny][col];
+        if (tile && tile.terrain === '对岸') {
+          tile.walkable = true;
+          tile.data.blocked = false;
+          tile._bridgeHead = true;
+        }
+      }
+    }
+  }
+}
+
 // ====== 水流方向 ======
 // 根据周围8方向水域邻居分布，计算"水"字的旋转角度
 // "水"字默认(0°) = 上北下南，水向北流
 function waterFlowAngle(x, y) {
   function isW(ix, iy) {
     if (ix < 0 || ix >= COLS || iy < 0 || iy >= ROWS) return false;
-    return TERRAIN[iy][ix] === 5;
+    return TERRAIN[iy][ix] === 0; // 0=水域
   }
-  const n  = isW(x, y-1);
-  const s  = isW(x, y+1);
-  const e  = isW(x+1, y);
-  const w  = isW(x-1, y);
-  const ne = isW(x+1, y-1);
-  const se = isW(x+1, y+1);
-  const sw = isW(x-1, y+1);
-  const nw = isW(x-1, y-1);
+  const n  = isW(x, y-1), s  = isW(x, y+1), e  = isW(x+1, y), w  = isW(x-1, y);
+  const ne = isW(x+1, y-1), se = isW(x+1, y+1), sw = isW(x-1, y+1), nw = isW(x-1, y-1);
 
   let vx = 0, vy = 0;
-  const D = 0.707; // 对角权重
-  if (n)  vy -= 1;
-  if (s)  vy += 1;
-  if (e)  vx += 1;
-  if (w)  vx -= 1;
-  if (ne) { vx += D; vy -= D; }
-  if (se) { vx += D; vy += D; }
-  if (sw) { vx -= D; vy += D; }
-  if (nw) { vx -= D; vy -= D; }
+  const D = 0.707;
+  if (n)  vy -= 1; if (s)  vy += 1; if (e)  vx += 1; if (w)  vx -= 1;
+  if (ne) { vx += D; vy -= D; } if (se) { vx += D; vy += D; }
+  if (sw) { vx -= D; vy += D; } if (nw) { vx -= D; vy -= D; }
 
   if (vx === 0 && vy === 0) return 0;
   const angle = Math.atan2(vy, vx) * 180 / Math.PI;
   const deg = (angle + 90 + 360) % 360;
-  // snap 到最近的 45°（8方向：0/45/90/135/180/225/270/315）
   return Math.round(deg / 45) * 45 % 360;
 }
 
@@ -960,9 +1218,10 @@ function renderMap() {
     for (let x = 0; x < COLS; x++) {
       const tile = game.map[y][x];
       const div = document.createElement('div');
-      // 背景色：用地形背景
-      const bgCls = tile.terrainDef.bg;
-      // 表面物：有则显示表面字符和颜色，否则显示地形水印
+      // 背景色：用地形背景，河滩用特殊沙色背景
+      let bgCls = tile.terrainDef.bg;
+      if (tile.isRiverbank && tile.terrain !== '对岸') bgCls = 'bg-riverbank';
+
       let colorCls, char;
       if (x === game.player.x && y === game.player.y) {
         colorCls = 'c-player';
@@ -971,14 +1230,24 @@ function renderMap() {
       } else if (tile.surface) {
         colorCls = tile.surface.colorClass;
         char = tile.surface.char;
+        // 桥在河滩背景上也不要河滩色
+        if (tile.surface.type === 'bridge') bgCls = 'bg-water';
         div.className = `tile ${bgCls} ${colorCls}`;
       } else if (tile.terrain === '水域') {
-        // 水域：显示"水"字，按流向旋转（上北下南=向北流=0°）
         const angle = waterFlowAngle(x, y);
         colorCls = 'c-water';
         char = '水';
         div.className = `tile ${bgCls} ${colorCls}`;
         div.style.transform = `rotate(${angle}deg)`;
+      } else if (tile.terrain === '对岸') {
+        colorCls = 'c-farshore';
+        char = tile.surface ? tile.surface.char : '';
+        if (tile.surface) {
+          div.className = `tile ${bgCls} ${tile.surface.colorClass}`;
+        } else {
+          div.className = `tile ${bgCls} ${colorCls}`;
+        }
+        div.style.opacity = '0.5';
       } else {
         // 其他纯地形格：只保留淡色背景水印，不显示文字
         colorCls = '';
@@ -1024,7 +1293,7 @@ function renderDetail(x, y) {
     case 'house':  panel.innerHTML = renderHouseDetail(tile, x, y); break;
     case 'grass':  panel.innerHTML = renderGrassDetail(tile, x, y); break;
     case 'rock':   panel.innerHTML = renderRockDetail(tile, x, y); break;
-    case 'terrain':panel.innerHTML = renderTerrainDetail(tile, x, y); break;
+    case 'bridge': panel.innerHTML = renderBridgeDetail(tile, x, y); break;
   }
 }
 
@@ -1167,13 +1436,84 @@ function renderWaterDetail(tile, x, y) {
 
 function renderFieldDetail(tile, x, y) {
   const d = tile.data;
-  const slopeWarn = d.slope > 15 ? 'bad' : d.slope > 8 ? 'warn' : 'good';
+  if (d.blocked) {
+    return `
+      <div class="section">
+        <div class="section-title">河对岸 — 未探索区域</div>
+        <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+        <div class="info-row"><span class="info-label">状态</span><span class="info-value" style="color:#f85149">⚠ 尚未开放</span></div>
+      </div>
+      <div class="empty-msg" style="padding-top:24px;color:#6e7681">
+        对岸笼罩在雾气中…<br><br>
+        你需要过桥才能探索对岸的土地。<br>
+        <span style="font-size:11px;color:#484f58">（走到桥上即可过河）</span>
+      </div>
+    `;
+  }
+
+  // 桥头落脚点
+  if (tile._bridgeHead) {
+    return `
+      <div class="section">
+        <div class="section-title">桥头 — 对岸登陆点</div>
+        <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+        <div class="info-row"><span class="info-label">状态</span><span class="info-value" style="color:#d29922">📍 桥头安全区</span></div>
+      </div>
+      <div class="section">
+        <div class="section-title">地形信息</div>
+        <div class="info-row"><span class="info-label">土壤类型</span><span class="info-value">${d.soilType}</span></div>
+        <div class="info-row"><span class="info-label">海拔</span><span class="info-value">${d.elevation}m</span></div>
+        <div class="info-row"><span class="info-label">备注</span><span class="info-value" style="font-size:11px;color:#8b949e">对岸区域尚待开发。可从此处返回桥梁。</span></div>
+      </div>
+      <div class="section">
+        <div class="section-title">操作</div>
+        <div class="info-row"><span class="info-label">可操作</span><span class="info-value">返回：走到桥上 (WASD)</span></div>
+      </div>
+    `;
+  }
+
+  // 河滩土特殊展示
+  if (d.isRiverbank) {
+    const dist = waterDistance(x, y);
+    return `
+      <div class="section">
+        <div class="section-title">河滩 — ${tile.terrain}</div>
+        <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+        <div class="info-row"><span class="info-label">土壤类型</span><span class="info-value" style="color:#d29922">${d.soilType}</span></div>
+        <div class="info-row"><span class="info-label">沙粒含量</span><span class="info-value">${d.sandContent}</span></div>
+        <div class="info-row"><span class="info-label">有机质</span><span class="info-value" style="color:#f85149">${d.organicMatter}</span></div>
+      </div>
+      <div class="section">
+        <div class="section-title">土壤养分</div>
+        ${nutrientBar('氮(N)', d.nitrogen, 100)}
+        ${nutrientBar('磷(P)', d.phosphorus, 100)}
+        ${nutrientBar('钾(K)', d.potassium, 100)}
+        ${bar('水分', d.moisture, 100, '%', {red:20,yellow:40})}
+        <div class="info-row" style="margin-top:4px"><span class="info-label">综合肥力</span><span class="info-value" style="color:#f85149">${d.fertility}</span></div>
+        <div class="info-row"><span class="info-label">透气性</span><span class="info-value">${d.aeration}</span></div>
+        <div class="info-row"><span class="info-label">pH值</span><span class="info-value">${d.pH}</span></div>
+      </div>
+      <div class="section">
+        <div class="section-title">河滩特征</div>
+        <div class="info-row"><span class="info-label">海拔</span><span class="info-value">${d.elevation}m</span></div>
+        <div class="info-row"><span class="info-label">备注</span><span class="info-value" style="font-size:11px;line-height:1.5;color:#8b949e">${d.note || '丰水期被淹、枯水期露出。沙粒含量极高，保水保肥差。'}</span></div>
+      </div>
+      <div class="section">
+        <div class="section-title">操作</div>
+        <div class="info-row"><span class="info-label">可操作</span><span class="info-value">开垦 (按 F) — 但肥力极低</span></div>
+      </div>
+    `;
+  }
+
+  const dist = waterDistance(x, y);
+  const distText = dist <= 2 ? '临河' : dist <= 5 ? '近河' : dist <= 8 ? '中距' : '远河';
+  const slopeWarn = d.slope > 5 ? 'bad' : d.slope > 2 ? 'warn' : 'good';
   return `
     <div class="section">
-      <div class="section-title">田地信息 — ${tile.terrain}</div>
+      <div class="section-title">田地信息 — ${tile.terrain} (${distText})</div>
       <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
       <div class="info-row"><span class="info-label">海拔</span><span class="info-value">${d.elevation}m</span></div>
-      <div class="info-row"><span class="info-label">倾角</span><span class="info-value ${slopeWarn}">${d.slope}° ${d.slope > 15 ? '(过于陡峭)' : d.slope > 8 ? '(略有坡度)' : '(平坦)'}</span></div>
+      <div class="info-row"><span class="info-label">倾角</span><span class="info-value ${slopeWarn}">${d.slope}° ${d.slope > 5 ? '(有起伏)' : d.slope > 2 ? '(微坡)' : '(平坦)'}</span></div>
       <div class="info-row"><span class="info-label">土壤类型</span><span class="info-value">${d.soilType}</span></div>
       <div class="info-row"><span class="info-label">综合肥力</span><span class="info-value">${d.fertility}</span></div>
       <div class="info-row"><span class="info-label">透气性</span><span class="info-value">${d.aeration}</span></div>
@@ -1255,18 +1595,20 @@ function renderHouseDetail(tile, x, y) {
 
 function renderGrassDetail(tile, x, y) {
   const d = tile.data;
+  const isBank = d.soilType === '河滩土';
   return `
     <div class="section">
-      <div class="section-title">荒地信息</div>
+      <div class="section-title">${isBank ? '河滩植被' : '荒地信息'}</div>
       <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
       <div class="info-row"><span class="info-label">类型</span><span class="info-value">${d.soilType}</span></div>
-      <div class="info-row"><span class="info-label">杂草</span><span class="info-value">${d.overgrowth}</span></div>
+      <div class="info-row"><span class="info-label">植被</span><span class="info-value">${d.overgrowth}</span></div>
       <div class="info-row"><span class="info-label">肥力</span><span class="info-value warn">${d.fertility}</span></div>
+      ${isBank ? `<div class="info-row"><span class="info-label">特征</span><span class="info-value" style="font-size:11px;color:#8b949e">丰水期淹没、枯水期露出。<br>只长芦苇、荻草等草本植物。</span></div>` : ''}
     </div>
     <div class="section">
       <div class="section-title">操作</div>
       <div class="info-row"><span class="info-label">可操作</span><span class="info-value">开垦为田地 (按 F)</span></div>
-      <div class="info-row"><span class="info-label">备注</span><span class="info-value" style="font-size:11px">开垦后肥力低于老田，需长期施肥改良</span></div>
+      ${isBank ? `<div class="info-row"><span class="info-label">⚠</span><span class="info-value" style="color:#f85149;font-size:11px">河滩开垦后肥力极低，需大量施肥</span></div>` : `<div class="info-row"><span class="info-label">备注</span><span class="info-value" style="font-size:11px">开垦后肥力低于老田，需长期施肥改良</span></div>`}
     </div>
   `;
 }
@@ -1283,6 +1625,23 @@ function renderRockDetail(tile, x, y) {
     <div class="section">
       <div class="section-title">操作</div>
       <div class="info-row"><span class="info-label">可操作</span><span class="info-value">开采 (需镐子)</span></div>
+    </div>
+  `;
+}
+
+function renderBridgeDetail(tile, x, y) {
+  const d = tile.data;
+  return `
+    <div class="section">
+      <div class="section-title">桥梁信息</div>
+      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
+      <div class="info-row"><span class="info-label">类型</span><span class="info-value">${d.bridgeType}</span></div>
+      <div class="info-row"><span class="info-label">状态</span><span class="info-value good">可通过</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">操作</div>
+      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">步行过桥 (WASD直接走)</span></div>
+      <div class="info-row"><span class="info-label">备注</span><span class="info-value" style="font-size:11px;color:#8b949e">连接两岸的唯一通道。过桥后到达对岸，但目前对岸尚未完全开放。</span></div>
     </div>
   `;
 }
@@ -1610,6 +1969,16 @@ function interact() {
   const tile = game.map[game.player.y][game.player.x];
   const detailPanel = document.getElementById('detail-panel');
 
+  if (tile.type === 'bridge') {
+    detailPanel.innerHTML = `<div class="empty-msg" style="color:#B0BEC5">🌉 木桥<br><br>连接两岸的通道<br>按 WASD 走到对岸桥头</div>`;
+    return;
+  }
+
+  if (tile._bridgeHead) {
+    detailPanel.innerHTML = `<div class="empty-msg" style="color:#d29922">📍 桥头 — 对岸<br><br>你踏上了对岸的土地。<br>目前对岸尚未完全开放，<br>但你可以站在这里眺望。<br><br><span style="font-size:11px;color:#6e7681">（返回：走回桥上即可）</span></div>`;
+    return;
+  }
+
   if (tile.type === 'shop') {
     openShop();
     return;
@@ -1625,12 +1994,16 @@ function interact() {
       detailPanel.innerHTML = `<div class="empty-msg" style="color:#d29922">🌱 作物尚未成熟<br>当前阶段：${stage.name}<br>还需约 ${CROP_GROWTH[p.cropType].total - p.growthDays} 天<br><br>按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">R</kbd> 浇水 &nbsp; <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">T</kbd> 施肥</div>`;
     }
   } else if (tile.type === 'field') {
+    if (tile.data && tile.data.blocked) {
+      detailPanel.innerHTML = `<div class="empty-msg" style="color:#f85149">🚧 河对岸尚未开放<br><br><span style="font-size:11px;color:#6e7681">需要船或桥才能到达对岸</span></div>`;
+    } else {
     // 空地 → 播种
     const seed = hasAnySeed();
     if (seed) {
       plantSeed(game.player.x, game.player.y, seed);
     } else {
       detailPanel.innerHTML = `<div class="empty-msg" style="color:#f85149">背包中没有种子！<br>请去商店购买</div>`;
+    }
     }
   } else if (tile.type === 'water') {
     detailPanel.innerHTML = `<div class="empty-msg" style="color:#42a5f5">🪣 水桶已装满水！<br>可以去浇灌作物了</div>`;
