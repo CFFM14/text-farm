@@ -77,6 +77,7 @@
   .bg-hill     { background: rgba(130,150,55,0.05); }   /* 丘陵 */
   .bg-farshore { background: rgba(60,60,60,0.10); }     /* 河对岸 — 灰暗 */
   .bg-riverbank { background: rgba(180,160,120,0.06); } /* 河滩 — 沙质淡黄 */
+  .bg-tilled    { background: rgba(100,80,50,0.08); }    /* 翻耕地 — 土色加深 */
   /* 表面物也保留背景微调 */
   .bg-crop    { background: rgba(76,175,80,0.06); }
   .bg-tree    { background: rgba(27,94,32,0.10); }
@@ -99,6 +100,7 @@
   .c-shop   { color: #FFB300; }
   .c-house  { color: #B0BEC5; }
   .c-rock   { color: #78909C; }
+  .c-road   { color: #a1887f; }
   .c-farshore { color: rgba(255,255,255,0.15); }
   .c-player { color: #00e5ff; text-shadow: 0 0 8px rgba(0,229,255,0.5); }
   .c-terrain { opacity: 0.35; font-size: 15px; color: rgba(255,255,255,0.25); } /* 地形水印 */
@@ -175,14 +177,21 @@
     background: #0d1117;
     border: 1px solid #30363d;
     border-radius: 6px;
-    padding: 12px 14px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+  #detail-content {
     flex: 1;
     overflow-y: auto;
     min-height: 0;
+    padding: 0 14px 12px;
   }
-  #detail-panel::-webkit-scrollbar { width: 6px; }
-  #detail-panel::-webkit-scrollbar-track { background: transparent; }
-  #detail-panel::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+  #detail-content::-webkit-scrollbar { width: 6px; }
+  #detail-content::-webkit-scrollbar-track { background: transparent; }
+  #detail-content::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
 
   .section { margin-bottom: 14px; }
   .section:last-child { margin-bottom: 0; }
@@ -436,6 +445,22 @@
   .sell-item-row .sell-info .sell-count { font-size: 10px; color: #6e7681; }
   .sell-item-row .sell-info .sell-price { font-size: 11px; color: #3fb950; }
   .sell-empty { text-align: center; color: #484f58; padding: 24px 0; font-size: 12px; }
+
+  /* ===== AI 旁白 ===== */
+  #ai-msg {
+    font-style: italic;
+    color: #8b949e;
+    font-size: 12px;
+    line-height: 1.6;
+    padding: 6px 14px;
+    border-bottom: 1px solid #21262d;
+    background: rgba(255,255,255,0.02);
+    min-height: 0;
+    transition: opacity 0.5s;
+    flex-shrink: 0;
+  }
+  #ai-msg:empty { display: none; }
+  #ai-msg.loading { color: #484f58; }
 </style>
 </head>
 <body>
@@ -464,7 +489,10 @@
         </div>
       </div>
       <div id="detail-panel">
-        <div class="empty-msg">点击地图上的任意格子<br>查看详细信息<br><br>使用 WASD 移动角色<br>按 F 与脚下的田地互动</div>
+        <div id="ai-msg"></div>
+        <div id="detail-content">
+          <div class="empty-msg">点击地图上的任意格子<br>查看详细信息<br><br>使用 WASD 移动角色<br>按 F 与脚下的田地互动</div>
+        </div>
       </div>
       <div id="shop-panel">
         <div class="shop-header">
@@ -509,7 +537,75 @@
   </div>
 </div>
 
+<script src="api-key.js"></script>
 <script>
+// ====== AI 旁白系统 ======
+const AI_SYSTEM_PROMPT = `你是长江中下游平原一个小农场的日志记录员。用老农民的口吻说话，朴实、接地气。
+每段话不超过120字。不要说套话和感叹词。关键数据（产量、品质、日期）不能编造，只能复述给定的数据。
+像在自言自语、记日志。`;
+
+let lastAiTime = 0;
+function showAiMsg(text) {
+  const el = document.getElementById('ai-msg');
+  if (!el) return;
+  el.textContent = text;
+  el.classList.remove('loading');
+}
+
+async function aiNarrate(scene, info) {
+  // 防抖：5秒内不重复调用
+  const now = Date.now();
+  if (now - lastAiTime < 5000) return;
+  lastAiTime = now;
+
+  const el = document.getElementById('ai-msg');
+  if (!el) return;
+  el.textContent = '…';
+  el.classList.add('loading');
+
+  try {
+    const res = await fetch('https://api.deepseek.com/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DEEPSEEK_API_KEY },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: AI_SYSTEM_PROMPT },
+          { role: 'user', content: scene + '\n' + info }
+        ],
+        temperature: 0.5,
+        max_tokens: 180
+      })
+    });
+    const data = await res.json();
+    if (data.choices && data.choices[0]) {
+      showAiMsg(data.choices[0].message.content.trim());
+    } else {
+      el.textContent = '';
+    }
+  } catch(e) {
+    el.textContent = ''; // API挂了静默
+  }
+}
+
+// 构建农场快照
+function farmSnapshot() {
+  let crops = '';
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const t = game.map[y][x];
+      if (t.planted && t.planted.cropType) {
+        const cg = CROP_GROWTH[t.planted.cropType];
+        const stage = getCropStage(t.planted.cropType, t.planted.growthDays);
+        const mature = isCropMature(t.planted.cropType, t.planted.growthDays);
+        crops += `- ${cg.name}(${x},${y})，${stage.name}，${mature?'已成熟可收获':'还需约'+Math.ceil(cg.total-t.planted.growthDays)+'天'}，${t.planted.watered?'今日浇过水':'未浇水'}，${t.planted.fertilized?'施过肥':'未施肥'}，土壤${t.data.soilType||'未知'}\n`;
+      }
+    }
+  }
+  if (!crops) crops = '（暂无作物）\n';
+  return `第${game.day}天，${game.season}季，${game.weather}，气温${game.temp}°C。背包金钱¥${game.player.money}。\n作物列表：\n${crops}`;
+}
+
 // ====== 游戏状态 ======
 const COLS = 30, ROWS = 16;
 const game = {
@@ -615,13 +711,6 @@ const TERRAIN = (() => {
       if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && !seen.has(k) && arr[ny][nx] !== 0) {
         seen.add(k); q.push([nx, ny]);
       }
-    }
-  }
-
-  // 右侧上部放丘陵（长江中下游偶有低丘，仅限玩家侧）
-  for (let y = 0; y < 7; y++) {
-    for (let x = 22; x < COLS; x++) {
-      if (arr[y][x] === 1) arr[y][x] = 2;
     }
   }
 
@@ -794,6 +883,9 @@ function surfaceAt(x, y, terrain) {
   // === 商店 ===
   if (x === 27 && y === 14 && terrain === '平原') return makeShop(x, y);
 
+  // === 路：从房屋/商店向南通往地图边缘 ===
+  if (terrain === '平原' && (x === 27 || x === 28) && y === 15) return makeRoad(x, y);
+
   // === 水稻田：近河平原（距水2-5格，避开水边河滩）===
   if (terrain === '平原' && x >= 10 && x <= 22 && y >= 4 && y <= 11) {
     if (wDist >= 2 && wDist <= 5 && !(x === 16 && y === 8) && !(x === 14 && y === 8)) return makeCrop(x, y, 'rice');
@@ -926,6 +1018,17 @@ function makeGrass(x, y) {
       canClear: true,
       soilType: isBank ? '河滩土' : '荒地',
       fertility: isBank ? '极贫瘠（沙质）' : '贫瘠'
+    }
+  };
+}
+
+function makeRoad(x, y) {
+  return {
+    type: 'road', char: '路', colorClass: 'c-road',
+    data: {
+      roadType: '乡村土路',
+      leadsTo: '向南通往外界',
+      note: '未来扩展新地图的入口'
     }
   };
 }
@@ -1156,10 +1259,11 @@ function renderMap() {
         }
         div.style.opacity = '0.5';
       } else {
-        // 其他纯地形格：只保留淡色背景水印，不显示文字
+        // 其他纯地形格：翻耕地背景加深，普通地淡色水印
         colorCls = '';
         char = '';
         div.className = `tile ${bgCls}`;
+        if (tile.tilled) div.classList.add('bg-tilled');
       }
       div.textContent = char;
       div.dataset.x = x;
@@ -1182,10 +1286,9 @@ function selectTile(x, y) {
 }
 
 function renderDetail(x, y) {
-  const panel = document.getElementById('detail-panel');
+  const panel = document.getElementById('detail-content');
   const tile = game.map[y][x];
 
-  // 如果玩家在此格，显示玩家信息
   if (x === game.player.x && y === game.player.y) {
     panel.innerHTML = renderPlayerDetail();
     return;
@@ -1413,8 +1516,12 @@ function renderFieldDetail(tile, x, y) {
     </div>
     <div class="section">
       <div class="section-title">操作</div>
-      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">翻耕 / 播种 (按 F)</span></div>
-      <div class="info-row"><span class="info-label">状态</span><span class="info-value" style="color:#8b949e">空闲田地，可种植作物</span></div>
+      ${tile.tilled
+        ? `<div class="info-row"><span class="info-label">翻耕状态</span><span class="info-value good">✅ 已翻耕 — 土壤疏松</span></div>`
+        : `<div class="info-row"><span class="info-label">翻耕状态</span><span class="info-value warn">❌ 未翻耕 — 土壤板结</span></div>
+           <div class="info-row"><span class="info-label">⚠ 风险</span><span class="info-value" style="font-size:11px;color:#f85149">种子难发芽 · 杂草疯长 · 病虫害多 · 肥料利用率低</span></div>`
+      }
+      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">${tile.tilled ? '播种 (选中种子按 F)' : '翻耕 (选中锄头按 F) 或 播种'}</span></div>
     </div>
   `;
 }
@@ -1834,15 +1941,16 @@ function movePlayer(dx, dy) {
 
 function interact() {
   const tile = game.map[game.player.y][game.player.x];
-  const detailPanel = document.getElementById('detail-panel');
+  const detailPanel = document.getElementById('detail-content');
+  const handItem = game.inventory[game.selectedSlot];
 
   if (tile.type === 'shop') {
     openShop();
+    aiNarrate('进入商店', '兜里揣着¥' + game.player.money + '，站在乡间小卖部门口。' + farmSnapshot());
     return;
   }
 
   if (tile.type === 'crop' || (tile.planted && tile.planted.cropType)) {
-    // 站在作物上 → 检查是否成熟
     const p = tile.planted;
     if (isCropMature(p.cropType, p.growthDays)) {
       harvestCrop(game.player.x, game.player.y);
@@ -1853,23 +1961,25 @@ function interact() {
   } else if (tile.type === 'field') {
     if (tile.data && tile.data.blocked) {
       detailPanel.innerHTML = `<div class="empty-msg" style="color:#f85149">🚧 河对岸尚未开放<br><br><span style="font-size:11px;color:#6e7681">需要船或桥才能到达对岸</span></div>`;
+    } else if (!handItem) {
+      detailPanel.innerHTML = `<div class="empty-msg" style="color:#8b949e">手里没有工具<br><br>按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">1~8</kbd> 选择物品</div>`;
+    } else if (handItem.id === 'hoe') {
+      // 手持锄头 → 翻耕
+      tillSoil(tile, detailPanel);
+    } else if (handItem.id.endsWith('_seed')) {
+      // 手持种子 → 播种
+      plantSeed(game.player.x, game.player.y, { item: handItem, slotIdx: game.selectedSlot });
     } else {
-    // 空地 → 播种
-    const seed = hasAnySeed();
-    if (seed) {
-      plantSeed(game.player.x, game.player.y, seed);
-    } else {
-      detailPanel.innerHTML = `<div class="empty-msg" style="color:#f85149">背包中没有种子！<br>请去商店购买</div>`;
-    }
+      detailPanel.innerHTML = `<div class="empty-msg" style="color:#d29922">${handItem.icon} ${handItem.name} 不能用于此处<br><br>站在空地上请使用锄头或种子</div>`;
     }
   } else if (tile.type === 'water') {
     detailPanel.innerHTML = `<div class="empty-msg" style="color:#42a5f5">🪣 水桶已装满水！<br>可以去浇灌作物了</div>`;
     advanceTime(5);
   } else if (tile.type === 'grass') {
     detailPanel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌾 已开垦荒地为田地！<br>肥力较低，需施肥改良</div>`;
-    // 将荒地转为田地
     tile.type = 'field';
     tile.surface = null;
+    tile.tilled = false;
     tile.walkable = true;
     tile.data = terrainData(tile.terrain, game.player.x, game.player.y);
     advanceTime(30);
@@ -1883,14 +1993,29 @@ function interact() {
       game.player.satiety = Math.min(100, game.player.satiety + 20);
       if (game.day !== prevDay) updateCropGrowth();
       renderStatus();
+      aiNarrate('清晨起床', '现在是' + farmSnapshot());
     } else {
       detailPanel.innerHTML = `<div class="empty-msg" style="color:#d29922">现在是白天，无法休息<br>夜晚 (18:00后) 才能睡觉</div>`;
     }
+  } else if (tile.type === 'road') {
+    detailPanel.innerHTML = `<div class="empty-msg" style="color:#8d6e63">🛤 乡村土路<br><br>往南通往外界的主干道<br>将来会从这里扩展新地图</div>`;
   } else {
     selectTile(game.player.x, game.player.y);
   }
   game.player.satiety = Math.max(0, game.player.satiety - 0.5);
   renderStatus();
+}
+
+// ====== 翻耕系统 ======
+function tillSoil(tile, detailPanel) {
+  if (tile.tilled) {
+    detailPanel.innerHTML = `<div class="empty-msg" style="color:#8b949e">🔧 这块地已经翻耕过了<br>土壤疏松，适合播种</div>`;
+    return;
+  }
+  tile.tilled = true;
+  advanceTime(20);
+  renderMap();
+  detailPanel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🔧 已完成翻耕！<br>土壤疏松透气，适合播种<br><br>按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">1~8</kbd> 切换到种子后按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">F</kbd> 播种</div>`;
 }
 
 // ====== 种植/浇水/施肥/收获 ======
@@ -1905,17 +2030,15 @@ function plantSeed(x, y, seedInfo) {
   tile.planted = { cropType, plantedDay: game.day, growthDays: 0, watered: false, fertilized: false };
   tile.type = 'crop';
   tile.surface = { type:'crop', char:cg.char, colorClass:cg.stages[0].cls, data:{ cropType } };
-  // 初始化简化data用于详情面板
+  // 保留原有土壤数据，只更新作物相关字段
   tile.data = {
+    ...tile.data, // 保留 soilType, elevation, slope, moisture, N/P/K, pH 等
     cropType, cropName:cg.name, field:cg.field,
     stage:cg.stages[0].name, growthDays:0, totalDays:cg.total,
     temperature: game.temp, humidity: 50, sunlight: '充足',
-    soilMoisture: 50, nitrogen:30, phosphorus:20, potassium:25,
-    fertility:'中等', aeration:'良好', pH:'6.5',
-    pests:'无', disease:'无', weeds:'无', health:90,
     yield: cg.yieldBase + 'kg', quality:'良好',
   };
-  const panel = document.getElementById('detail-panel');
+  const panel = document.getElementById('detail-content');
   panel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌱 已播种 ${cg.name}！<br>记得按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;color:#8b949e;">R</kbd> 浇水加速生长</div>`;
   renderMap();
   renderInventory();
@@ -1926,17 +2049,17 @@ function waterAction() {
   const tile = game.map[game.player.y][game.player.x];
   if (!tile.planted || !tile.planted.cropType) return;
   if (!hasItem('bucket')) {
-    const panel = document.getElementById('detail-panel');
+    const panel = document.getElementById('detail-content');
     panel.innerHTML = `<div class="empty-msg" style="color:#f85149">没有水桶！<br>请去商店购买</div>`;
     return;
   }
   if (tile.planted.watered) {
-    const panel = document.getElementById('detail-panel');
+    const panel = document.getElementById('detail-content');
     panel.innerHTML = `<div class="empty-msg" style="color:#8b949e">今天已经浇过水了<br>明天再来吧</div>`;
     return;
   }
   tile.planted.watered = true;
-  const panel = document.getElementById('detail-panel');
+  const panel = document.getElementById('detail-content');
   panel.innerHTML = `<div class="empty-msg" style="color:#42a5f5">💧 已浇水！<br>今日生长速度 ×1.5</div>`;
   advanceTime(5);
 }
@@ -1945,19 +2068,19 @@ function fertilizeAction() {
   const tile = game.map[game.player.y][game.player.x];
   if (!tile.planted || !tile.planted.cropType) return;
   if (tile.planted.fertilized) {
-    const panel = document.getElementById('detail-panel');
+    const panel = document.getElementById('detail-content');
     panel.innerHTML = `<div class="empty-msg" style="color:#8b949e">本阶段已施过肥<br>无需重复施肥</div>`;
     return;
   }
   const fert = hasAnyFertilizer();
   if (!fert) {
-    const panel = document.getElementById('detail-panel');
+    const panel = document.getElementById('detail-content');
     panel.innerHTML = `<div class="empty-msg" style="color:#f85149">背包中没有肥料！<br>请去商店购买</div>`;
     return;
   }
   removeFromInventory(fert.slotIdx, 1);
   tile.planted.fertilized = true;
-  const panel = document.getElementById('detail-panel');
+  const panel = document.getElementById('detail-content');
   panel.innerHTML = `<div class="empty-msg" style="color:#d29922">🧪 已施 ${fert.item.name}！<br>预计增产 30%</div>`;
   renderInventory();
   advanceTime(10);
@@ -1974,7 +2097,7 @@ function harvestCrop(x, y) {
 
   const added = addToInventory({ id:cropId, name:cg.name, icon:cg.char, count:1, color:'#FFD700' });
   if (!added) {
-    const panel = document.getElementById('detail-panel');
+    const panel = document.getElementById('detail-content');
     panel.innerHTML = `<div class="empty-msg" style="color:#f85149">背包已满！<br>请先清理背包再来收获</div>`;
     return;
   }
@@ -1985,8 +2108,9 @@ function harvestCrop(x, y) {
   tile.surface = null;
   tile.data = terrainData(tile.terrain, x, y);
 
-  const panel = document.getElementById('detail-panel');
+  const panel = document.getElementById('detail-content');
   panel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌾 收获完成！<br>${cg.name} ${yieldAmount}kg<br>已放入背包</div>`;
+  aiNarrate('收获', `刚收获了${cg.name}，产量约${yieldAmount}kg，品质${tile.data.quality||'一般'}。` + farmSnapshot());
   renderMap();
   renderInventory();
   advanceTime(20);
