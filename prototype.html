@@ -646,35 +646,6 @@ function waterDistance(x, y) {
   return min;
 }
 
-// 预扫描渡桥位置：找到河流最窄处（约2格宽）
-function findBridgeSpot() {
-  for (let y = 3; y <= 10; y++) {
-    let waterStart = -1, waterEnd = -1;
-    for (let x = 0; x < COLS; x++) {
-      if (TERRAIN[y][x] === 0) {
-        if (waterStart === -1) waterStart = x;
-        waterEnd = x;
-      }
-    }
-    if (waterStart >= 0 && waterEnd - waterStart <= 2) {
-      // 检查两岸是否都有陆地
-      const leftBank = waterStart - 1;
-      const rightBank = waterEnd + 1;
-      if (leftBank >= 0 && rightBank < COLS &&
-          TERRAIN[y][leftBank] !== 0 && TERRAIN[y][rightBank] !== 0) {
-        // 返回完整的水域列范围
-        const waterCols = [];
-        for (let wx = waterStart; wx <= waterEnd; wx++) waterCols.push(wx);
-        return { y, waterCols };
-      }
-      }
-    }
-  }
-  return null; // 没找到合适位置
-}
-
-const BRIDGE_SPOT = findBridgeSpot();
-
 // 计算到最近水域的距离（曼哈顿距离）
 function waterDistance(x, y) {
   let min = 50;
@@ -798,19 +769,12 @@ function hasAnySeed() {
 
 // ====== 表面物定义 ======
 function surfaceAt(x, y, terrain) {
-  if (terrain === '水域') {
-    // 渡桥：在桥位的水域格上放置桥面
-    if (BRIDGE_SPOT && y === BRIDGE_SPOT.y && BRIDGE_SPOT.waterCols.includes(x)) {
-      return makeBridge(x, y);
-    }
-    return null;
-  }
+  if (terrain === '水域') return null;
 
   const wDist = waterDistance(x, y);
 
-  // 河对岸：远处有树（距水≥3格），近河处为空
+  // 河对岸：近河处有稀疏草地
   if (terrain === '对岸') {
-    if (wDist >= 3 && y <= 5 && x >= 2 && x <= 14 && (x + y) % 3 !== 0) return makeTree(x, y);
     if (wDist === 1 && (x + y) % 4 === 0 && y >= 3) return makeGrass(x, y);
     return null;
   }
@@ -821,17 +785,14 @@ function surfaceAt(x, y, terrain) {
     return null; // 河滩大部分为空地/沙地
   }
 
+  // === 唯一的树：(16,9) ===
+  if (x === 16 && y === 9 && terrain === '平原') return makeTree(x, y);
+
   // === 房屋（右下方小村，玩家侧）===
   if ((x === 27 || x === 28) && (y === 12 || y === 13) && terrain === '平原') return makeHouse(x, y);
 
   // === 商店 ===
   if (x === 27 && y === 14 && terrain === '平原') return makeShop(x, y);
-
-  // === 景观树：田中间一棵（平原耕地中罕见的孤树）===
-  if (x === 22 && y === 8 && terrain === '平原' && wDist >= 3) return makeTree(x, y);
-
-  // === 丘陵树木 ===
-  if (terrain === '丘陵' && y <= 6 && (x + y) % 3 !== 0 && wDist >= 2) return makeTree(x, y);
 
   // === 水稻田：近河平原（距水2-5格，避开水边河滩）===
   if (terrain === '平原' && x >= 10 && x <= 22 && y >= 4 && y <= 11) {
@@ -965,17 +926,6 @@ function makeGrass(x, y) {
       canClear: true,
       soilType: isBank ? '河滩土' : '荒地',
       fertility: isBank ? '极贫瘠（沙质）' : '贫瘠'
-    }
-  };
-}
-
-function makeBridge(x, y) {
-  return {
-    type: 'bridge', char: '桥', colorClass: 'c-house',
-    data: {
-      bridgeType: '木桥',
-      connectsBank: true,
-      canCross: true
     }
   };
 }
@@ -1114,8 +1064,7 @@ function buildMap() {
       }
 
       let walkable;
-      if (type === 'bridge') walkable = true;  // 桥可通行
-      else if (tName === '水域') walkable = false;
+      if (tName === '水域') walkable = false;
       else if (tName === '对岸') walkable = false;
       else if (surface && surface.type === 'rock') walkable = false;
       else walkable = true;
@@ -1146,46 +1095,6 @@ function buildMap() {
 }
 
 game.map = buildMap();
-
-// 桥头堡：让桥两端相邻的对岸格可通行（过桥落脚点）
-if (BRIDGE_SPOT) {
-  const by = BRIDGE_SPOT.y;
-  const leftCol = BRIDGE_SPOT.waterCols[0] - 1;
-  const rightCol = BRIDGE_SPOT.waterCols[BRIDGE_SPOT.waterCols.length - 1] + 1;
-
-  // 左桥头（对岸侧）
-  if (leftCol >= 0 && by >= 0 && by < ROWS) {
-    const leftTile = game.map[by][leftCol];
-    if (leftTile && leftTile.terrain === '对岸') {
-      leftTile.walkable = true;
-      leftTile.data.blocked = false;
-      leftTile._bridgeHead = true;
-    }
-  }
-  // 右桥头（玩家侧）—— 应该已经是 walkable 的
-  if (rightCol < COLS && by >= 0 && by < ROWS) {
-    const rightTile = game.map[by][rightCol];
-    if (rightTile && rightTile.terrain === '对岸') {
-      rightTile.walkable = true;
-      rightTile.data.blocked = false;
-      rightTile._bridgeHead = true;
-    }
-  }
-  // 上下邻格也设为可走（方便从桥上下到对岸）
-  for (const dy of [-1, 1]) {
-    for (const col of [leftCol]) {
-      const ny = by + dy;
-      if (ny >= 0 && ny < ROWS && col >= 0 && col < COLS) {
-        const tile = game.map[ny][col];
-        if (tile && tile.terrain === '对岸') {
-          tile.walkable = true;
-          tile.data.blocked = false;
-          tile._bridgeHead = true;
-        }
-      }
-    }
-  }
-}
 
 // ====== 水流方向 ======
 // 根据周围8方向水域邻居分布，计算"水"字的旋转角度
@@ -1230,8 +1139,6 @@ function renderMap() {
       } else if (tile.surface) {
         colorCls = tile.surface.colorClass;
         char = tile.surface.char;
-        // 桥在河滩背景上也不要河滩色
-        if (tile.surface.type === 'bridge') bgCls = 'bg-water';
         div.className = `tile ${bgCls} ${colorCls}`;
       } else if (tile.terrain === '水域') {
         const angle = waterFlowAngle(x, y);
@@ -1293,7 +1200,6 @@ function renderDetail(x, y) {
     case 'house':  panel.innerHTML = renderHouseDetail(tile, x, y); break;
     case 'grass':  panel.innerHTML = renderGrassDetail(tile, x, y); break;
     case 'rock':   panel.innerHTML = renderRockDetail(tile, x, y); break;
-    case 'bridge': panel.innerHTML = renderBridgeDetail(tile, x, y); break;
   }
 }
 
@@ -1445,29 +1351,7 @@ function renderFieldDetail(tile, x, y) {
       </div>
       <div class="empty-msg" style="padding-top:24px;color:#6e7681">
         对岸笼罩在雾气中…<br><br>
-        你需要过桥才能探索对岸的土地。<br>
-        <span style="font-size:11px;color:#484f58">（走到桥上即可过河）</span>
-      </div>
-    `;
-  }
-
-  // 桥头落脚点
-  if (tile._bridgeHead) {
-    return `
-      <div class="section">
-        <div class="section-title">桥头 — 对岸登陆点</div>
-        <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
-        <div class="info-row"><span class="info-label">状态</span><span class="info-value" style="color:#d29922">📍 桥头安全区</span></div>
-      </div>
-      <div class="section">
-        <div class="section-title">地形信息</div>
-        <div class="info-row"><span class="info-label">土壤类型</span><span class="info-value">${d.soilType}</span></div>
-        <div class="info-row"><span class="info-label">海拔</span><span class="info-value">${d.elevation}m</span></div>
-        <div class="info-row"><span class="info-label">备注</span><span class="info-value" style="font-size:11px;color:#8b949e">对岸区域尚待开发。可从此处返回桥梁。</span></div>
-      </div>
-      <div class="section">
-        <div class="section-title">操作</div>
-        <div class="info-row"><span class="info-label">可操作</span><span class="info-value">返回：走到桥上 (WASD)</span></div>
+        或许将来可以修一座桥通往对岸。
       </div>
     `;
   }
@@ -1625,23 +1509,6 @@ function renderRockDetail(tile, x, y) {
     <div class="section">
       <div class="section-title">操作</div>
       <div class="info-row"><span class="info-label">可操作</span><span class="info-value">开采 (需镐子)</span></div>
-    </div>
-  `;
-}
-
-function renderBridgeDetail(tile, x, y) {
-  const d = tile.data;
-  return `
-    <div class="section">
-      <div class="section-title">桥梁信息</div>
-      <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
-      <div class="info-row"><span class="info-label">类型</span><span class="info-value">${d.bridgeType}</span></div>
-      <div class="info-row"><span class="info-label">状态</span><span class="info-value good">可通过</span></div>
-    </div>
-    <div class="section">
-      <div class="section-title">操作</div>
-      <div class="info-row"><span class="info-label">可操作</span><span class="info-value">步行过桥 (WASD直接走)</span></div>
-      <div class="info-row"><span class="info-label">备注</span><span class="info-value" style="font-size:11px;color:#8b949e">连接两岸的唯一通道。过桥后到达对岸，但目前对岸尚未完全开放。</span></div>
     </div>
   `;
 }
@@ -1968,16 +1835,6 @@ function movePlayer(dx, dy) {
 function interact() {
   const tile = game.map[game.player.y][game.player.x];
   const detailPanel = document.getElementById('detail-panel');
-
-  if (tile.type === 'bridge') {
-    detailPanel.innerHTML = `<div class="empty-msg" style="color:#B0BEC5">🌉 木桥<br><br>连接两岸的通道<br>按 WASD 走到对岸桥头</div>`;
-    return;
-  }
-
-  if (tile._bridgeHead) {
-    detailPanel.innerHTML = `<div class="empty-msg" style="color:#d29922">📍 桥头 — 对岸<br><br>你踏上了对岸的土地。<br>目前对岸尚未完全开放，<br>但你可以站在这里眺望。<br><br><span style="font-size:11px;color:#6e7681">（返回：走回桥上即可）</span></div>`;
-    return;
-  }
 
   if (tile.type === 'shop') {
     openShop();
