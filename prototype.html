@@ -518,7 +518,6 @@
   </div>
   <div id="bottom-bar">
     <div class="player-stats">
-      <span>🍚 饱食度: <span class="stat-val" id="satiety-display">80%</span></span>
       <span>💰 <span class="stat-val good" id="money-display">¥500</span></span>
     </div>
     <div id="inventory-area">
@@ -613,7 +612,7 @@ const game = {
   temp: 22.5,
   timeMin: 480, // 8:00
   speed: 1, paused: false,
-  player: { x: 14, y: 8, satiety: 80, money: 500, facing: 'right' },
+  player: { x: 14, y: 8, money: 500, facing: 'right' },
   selected: null,
   selectedSlot: 0,
   shopCart: [],
@@ -1742,7 +1741,6 @@ function renderTerrainDetail(tile, x, y) {
 
 function renderPlayerDetail() {
   const p = game.player;
-  const satCls = p.satiety > 60 ? 'good' : p.satiety > 30 ? 'warn' : 'bad';
   return `
     <div class="section">
       <div class="section-title">玩家信息</div>
@@ -1751,11 +1749,6 @@ function renderPlayerDetail() {
     </div>
     <div class="section">
       <div class="section-title">状态</div>
-      <div class="bar-row">
-        <span class="bar-label">饱食度</span>
-        <div class="bar-bg"><div class="bar-fill ${p.satiety>60?'fill-green':p.satiety>30?'fill-yellow':'fill-red'}" style="width:${p.satiety}%"></div></div>
-        <span class="bar-text">${p.satiety}%</span>
-      </div>
       <div class="info-row"><span class="info-label">金钱</span><span class="info-value" style="color:#3fb950">¥${p.money}</span></div>
     </div>
     <div class="section">
@@ -1977,11 +1970,7 @@ function renderStatus() {
   document.getElementById('time-display').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   document.getElementById('weather-display').textContent = `${weatherIcon(game.weather)} ${weatherLabel(game.weather)}`;
   document.getElementById('temp-display').textContent = `🌡 ${game.temp}°C`;
-  document.getElementById('satiety-display').textContent = `${game.player.satiety}%`;
   document.getElementById('money-display').textContent = `¥${game.player.money}`;
-  // 更新饱食度颜色
-  const satEl = document.getElementById('satiety-display');
-  satEl.className = 'stat-val ' + (game.player.satiety > 60 ? 'good' : game.player.satiety > 30 ? 'warn' : 'bad');
 }
 
 // ====== 输入处理 ======
@@ -2081,7 +2070,6 @@ function interact() {
       const prevDay = game.day;
       game.day++;
       game.timeMin = 360;
-      game.player.satiety = Math.min(100, game.player.satiety + 20);
       if (game.day !== prevDay) updateCropGrowth();
       renderStatus();
       aiNarrate('清晨起床', '现在是' + farmSnapshot());
@@ -2093,7 +2081,6 @@ function interact() {
   } else {
     selectTile(game.player.x, game.player.y);
   }
-  game.player.satiety = Math.max(0, game.player.satiety - 0.5);
   renderStatus();
 }
 
@@ -2487,7 +2474,6 @@ document.querySelectorAll('.speed-btn').forEach(btn => {
 setInterval(() => {
   if (game.paused || game.speed === 0) return;
   advanceTime(game.speed);
-  game.player.satiety = Math.max(0, game.player.satiety - 0.01 * game.speed);
   renderStatus();
   if (game.selected) renderDetail(game.selected.x, game.selected.y);
 }, 1000);
