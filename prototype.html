@@ -290,7 +290,24 @@
     justify-content: center;
     font-size: 14px;
     position: relative;
+    cursor: default;
+    transition: border-color 0.15s, background 0.15s;
   }
+  .inv-slot:hover { border-color: #484f58; }
+  .inv-slot.selected {
+    border-color: #58a6ff;
+    background: rgba(88,166,255,0.08);
+    box-shadow: 0 0 6px rgba(88,166,255,0.2);
+  }
+  .inv-slot .slot-num {
+    position: absolute;
+    top: 1px;
+    left: 3px;
+    font-size: 9px;
+    color: #484f58;
+    line-height: 1;
+  }
+  .inv-slot.selected .slot-num { color: #58a6ff; }
   .inv-slot.empty { color: #30363d; }
   .inv-slot .count {
     position: absolute;
@@ -308,49 +325,46 @@
     line-height: 2;
   }
 
-  /* ===== 商店弹窗 ===== */
-  #shop-overlay {
+  /* ===== 商店面板（右侧嵌入） ===== */
+  #shop-panel {
     display: none;
-    position: fixed;
-    inset: 0; z-index: 100;
-    background: rgba(0,0,0,0.6);
-    align-items: center;
-    justify-content: center;
-  }
-  #shop-overlay.show { display: flex; }
-  #shop-modal {
-    background: #161b22;
+    background: #0d1117;
     border: 1px solid #30363d;
-    border-radius: 8px;
-    width: 620px; max-height: 520px;
-    display: flex; flex-direction: column;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    border-radius: 6px;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
   }
+  #shop-panel.show { display: flex; }
+
   .shop-header {
     display: flex; align-items: center;
-    padding: 10px 14px;
+    padding: 10px 12px;
     border-bottom: 1px solid #21262d;
+    flex-shrink: 0;
   }
-  .shop-header .shop-name { font-size:15px; font-weight:bold; color:#FFB300; flex:1; }
+  .shop-header .shop-name { font-size:14px; font-weight:bold; color:#FFB300; flex:1; }
   .shop-close {
-    background: none; border: none; color: #6e7681; font-size: 18px;
-    cursor: pointer; padding: 2px 8px; border-radius: 4px;
+    background: none; border: none; color: #6e7681; font-size: 16px;
+    cursor: pointer; padding: 2px 6px; border-radius: 4px;
   }
   .shop-close:hover { color: #f85149; background: rgba(248,81,73,0.1); }
 
   /* 标签 */
   .shop-tabs {
-    display: flex; gap: 2px; padding: 8px 14px 0;
+    display: flex; gap: 1px; padding: 6px 10px 0;
     border-bottom: 1px solid #21262d;
+    flex-shrink: 0;
   }
   .shop-tab {
     background: none; border: none; color: #6e7681;
-    padding: 7px 16px; cursor: pointer; font-size: 13px;
+    padding: 6px 12px; cursor: pointer; font-size: 12px;
     font-family: inherit; border-radius: 6px 6px 0 0;
     position: relative; transition: all 0.15s;
   }
   .shop-tab:hover { color: #c9d1d9; background: rgba(255,255,255,0.03); }
-  .shop-tab.active { color: #58a6ff; background: #0d1117; }
+  .shop-tab.active { color: #58a6ff; background: #161b22; }
   .shop-tab .badge {
     position: absolute; top: -2px; right: -4px;
     background: #f85149; color: #fff; font-size: 10px;
@@ -360,22 +374,22 @@
   }
 
   /* 商品区 */
-  .shop-body { flex: 1; overflow-y: auto; padding: 12px 14px; min-height: 0; }
+  .shop-body { flex: 1; overflow-y: auto; padding: 10px 12px; min-height: 0; }
   .shop-body::-webkit-scrollbar { width: 5px; }
   .shop-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
-  .shop-items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .shop-items { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
   .shop-item-card {
-    background: #0d1117; border: 1px solid #21262d; border-radius: 6px;
-    padding: 12px 10px; text-align: center; cursor: default;
+    background: #161b22; border: 1px solid #21262d; border-radius: 6px;
+    padding: 10px 8px; text-align: center; cursor: default;
     transition: border-color 0.15s;
   }
   .shop-item-card:hover { border-color: #30363d; }
-  .shop-item-card .item-icon { font-size: 28px; margin-bottom: 4px; }
-  .shop-item-card .item-name { font-size: 12px; color: #c9d1d9; margin-bottom: 3px; }
-  .shop-item-card .item-price { font-size: 11px; color: #3fb950; margin-bottom: 8px; }
+  .shop-item-card .item-icon { font-size: 24px; margin-bottom: 3px; }
+  .shop-item-card .item-name { font-size: 11px; color: #c9d1d9; margin-bottom: 3px; }
+  .shop-item-card .item-price { font-size: 11px; color: #3fb950; margin-bottom: 6px; }
   .shop-item-card .item-btn {
     background: #21262d; border: 1px solid #30363d; color: #8b949e;
-    padding: 3px 14px; border-radius: 4px; cursor: pointer;
+    padding: 3px 10px; border-radius: 4px; cursor: pointer;
     font-size: 11px; font-family: inherit;
     transition: all 0.15s;
   }
@@ -383,25 +397,26 @@
 
   /* 购物车底部栏 */
   #shop-cart-bar {
-    border-top: 1px solid #21262d; padding: 8px 14px;
-    display: flex; align-items: center; gap: 10px;
-    font-size: 12px; min-height: 44px;
+    border-top: 1px solid #21262d; padding: 6px 10px;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    font-size: 11px; min-height: 40px;
+    flex-shrink: 0;
   }
-  #shop-cart-bar .cart-label { color: #6e7681; white-space: nowrap; }
+  #shop-cart-bar .cart-label { color: #6e7681; white-space: nowrap; font-size: 11px; }
   #shop-cart-bar .cart-items {
-    flex: 1; display: flex; gap: 6px; overflow-x: auto; flex-wrap: wrap;
+    flex: 1; display: flex; gap: 4px; overflow-x: auto; flex-wrap: wrap;
   }
   .cart-item {
-    background: #21262d; border-radius: 4px; padding: 2px 6px;
-    display: flex; align-items: center; gap: 4px; white-space: nowrap;
-    font-size: 11px; color: #c9d1d9;
+    background: #21262d; border-radius: 4px; padding: 2px 5px;
+    display: flex; align-items: center; gap: 3px; white-space: nowrap;
+    font-size: 10px; color: #c9d1d9;
   }
-  .cart-item .remove { color: #f85149; cursor: pointer; font-size: 13px; line-height: 1; }
-  .cart-total { color: #3fb950; font-weight: bold; white-space: nowrap; }
+  .cart-item .remove { color: #f85149; cursor: pointer; font-size: 12px; line-height: 1; }
+  .cart-total { color: #3fb950; font-weight: bold; white-space: nowrap; font-size: 12px; }
   .cart-btn {
     background: #21262d; border: 1px solid #30363d; color: #8b949e;
-    padding: 4px 12px; border-radius: 4px; cursor: pointer;
-    font-size: 11px; font-family: inherit; white-space: nowrap;
+    padding: 3px 10px; border-radius: 4px; cursor: pointer;
+    font-size: 10px; font-family: inherit; white-space: nowrap;
   }
   .cart-btn.primary { background: #238636; border-color: #2ea043; color: #fff; }
   .cart-btn.primary:hover { background: #2ea043; }
@@ -409,18 +424,18 @@
 
   /* 售卖区 */
   .sell-item-row {
-    background: #0d1117; border: 1px solid #21262d; border-radius: 6px;
-    padding: 10px 12px; margin-bottom: 6px;
-    display: flex; align-items: center; gap: 10px;
+    background: #161b22; border: 1px solid #21262d; border-radius: 6px;
+    padding: 8px 10px; margin-bottom: 5px;
+    display: flex; align-items: center; gap: 8px;
     cursor: pointer; transition: border-color 0.15s;
   }
   .sell-item-row:hover { border-color: #3fb950; }
-  .sell-item-row .sell-icon { font-size: 20px; }
-  .sell-item-row .sell-name { flex:1; font-size: 13px; color: #c9d1d9; }
+  .sell-item-row .sell-icon { font-size: 18px; }
+  .sell-item-row .sell-name { flex:1; font-size: 12px; color: #c9d1d9; }
   .sell-item-row .sell-info { text-align: right; }
-  .sell-item-row .sell-info .sell-count { font-size: 11px; color: #6e7681; }
-  .sell-item-row .sell-info .sell-price { font-size: 12px; color: #3fb950; }
-  .sell-empty { text-align: center; color: #484f58; padding: 30px 0; font-size: 13px; }
+  .sell-item-row .sell-info .sell-count { font-size: 10px; color: #6e7681; }
+  .sell-item-row .sell-info .sell-price { font-size: 11px; color: #3fb950; }
+  .sell-empty { text-align: center; color: #484f58; padding: 24px 0; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -451,6 +466,26 @@
       <div id="detail-panel">
         <div class="empty-msg">点击地图上的任意格子<br>查看详细信息<br><br>使用 WASD 移动角色<br>按 F 与脚下的田地互动</div>
       </div>
+      <div id="shop-panel">
+        <div class="shop-header">
+          <span class="shop-name">乡间小卖部</span>
+          <button class="shop-close" onclick="closeShop()">✕</button>
+        </div>
+        <div class="shop-tabs" id="shop-tabs">
+          <button class="shop-tab active" data-tab="农具">农具</button>
+          <button class="shop-tab" data-tab="肥料">肥料</button>
+          <button class="shop-tab" data-tab="种子">种子</button>
+          <button class="shop-tab" data-tab="售卖">售卖</button>
+        </div>
+        <div class="shop-body" id="shop-body"></div>
+        <div id="shop-cart-bar">
+          <span class="cart-label">购物车</span>
+          <div class="cart-items" id="cart-items-display"></div>
+          <span class="cart-total" id="cart-total">¥0</span>
+          <button class="cart-btn" onclick="clearCart()">清空</button>
+          <button class="cart-btn primary" onclick="checkout()">结算</button>
+        </div>
+      </div>
     </div>
   </div>
   <div id="bottom-bar">
@@ -468,31 +503,8 @@
       <kbd>R</kbd> 浇水 &nbsp;
       <kbd>T</kbd> 施肥 &nbsp;
       <kbd>点击</kbd> 查看 &nbsp;
-      <kbd>1</kbd>~<kbd>5</kbd> 调速
-    </div>
-  </div>
-</div>
-
-<!-- 商店弹窗 -->
-<div id="shop-overlay">
-  <div id="shop-modal">
-    <div class="shop-header">
-      <span class="shop-name">乡间小卖部</span>
-      <button class="shop-close" onclick="closeShop()">✕</button>
-    </div>
-    <div class="shop-tabs" id="shop-tabs">
-      <button class="shop-tab active" data-tab="农具">农具</button>
-      <button class="shop-tab" data-tab="肥料">肥料</button>
-      <button class="shop-tab" data-tab="种子">种子</button>
-      <button class="shop-tab" data-tab="售卖">售卖</button>
-    </div>
-    <div class="shop-body" id="shop-body"></div>
-    <div id="shop-cart-bar">
-      <span class="cart-label">购物车</span>
-      <div class="cart-items" id="cart-items-display"></div>
-      <span class="cart-total" id="cart-total">¥0</span>
-      <button class="cart-btn" onclick="clearCart()">清空</button>
-      <button class="cart-btn primary" onclick="checkout()">结算</button>
+      <kbd>1</kbd>~<kbd>8</kbd> 背包 &nbsp;
+      <kbd>[</kbd><kbd>]</kbd> 调速
     </div>
   </div>
 </div>
@@ -506,6 +518,7 @@ const game = {
   speed: 1, paused: false,
   player: { x: 15, y: 8, satiety: 80, money: 500, facing: 'right' },
   selected: null,
+  selectedSlot: 0,
   shopCart: [],
   inventory: [
     { id:'rice_seed', name:'水稻种子', icon:'种', count:12, color:'#8BC34A' },
@@ -1340,21 +1353,27 @@ function renderInventory() {
   for (let i = 0; i < 8; i++) {
     const item = game.inventory[i];
     const slot = document.createElement('div');
+    slot.className = 'inv-slot';
+    if (i === game.selectedSlot) slot.classList.add('selected');
     if (item) {
       count++;
-      slot.className = 'inv-slot';
-      slot.innerHTML = `<span style="color:${item.color}">${item.icon}</span><span class="count">${item.count}</span>`;
+      slot.innerHTML = `<span class="slot-num">${i+1}</span><span style="color:${item.color}">${item.icon}</span><span class="count">${item.count}</span>`;
       slot.title = `${item.name} ×${item.count}`;
-      slot.dataset.slotIdx = i;
-      // 售卖模式下点击可卖
-      slot.addEventListener('click', () => {
-        const overlay = document.getElementById('shop-overlay');
-        if (overlay && overlay.style.display === 'flex') sellItem(i);
-      });
     } else {
-      slot.className = 'inv-slot empty';
-      slot.textContent = '·';
+      slot.classList.add('empty');
+      slot.innerHTML = `<span class="slot-num">${i+1}</span><span>·</span>`;
     }
+    slot.dataset.slotIdx = i;
+    // 点击选中槽位
+    slot.addEventListener('click', () => {
+      const shopPanel = document.getElementById('shop-panel');
+      if (shopPanel && shopPanel.classList.contains('show')) {
+        sellItem(i);
+      } else {
+        game.selectedSlot = i;
+        renderInventory();
+      }
+    });
     inv.appendChild(slot);
   }
   const label = document.querySelector('#inventory-area .inv-label');
@@ -1363,14 +1382,15 @@ function renderInventory() {
 
 // ====== 商店系统 ======
 function openShop() {
-  const overlay = document.getElementById('shop-overlay');
-  overlay.classList.add('show');
+  document.getElementById('detail-panel').style.display = 'none';
+  document.getElementById('shop-panel').classList.add('show');
   switchShopTab('农具');
   renderCartBar();
 }
 
 function closeShop() {
-  document.getElementById('shop-overlay').classList.remove('show');
+  document.getElementById('shop-panel').classList.remove('show');
+  document.getElementById('detail-panel').style.display = '';
 }
 
 function switchShopTab(category) {
@@ -1463,7 +1483,8 @@ function updateCartBadge() {
     if (!badge) {
       badge = document.createElement('span');
       badge.className = 'badge';
-      document.querySelector('.shop-tabs').appendChild(badge);
+      const firstTab = document.querySelector('.shop-tab');
+      if (firstTab) firstTab.appendChild(badge);
     }
     badge.textContent = qty;
     badge.style.display = '';
@@ -1545,8 +1566,8 @@ function renderStatus() {
 // ====== 输入处理 ======
 document.addEventListener('keydown', (e) => {
   // 商店打开时不处理移动
-  const overlay = document.getElementById('shop-overlay');
-  if (overlay && overlay.classList.contains('show')) {
+  const shopPanel = document.getElementById('shop-panel');
+  if (shopPanel && shopPanel.classList.contains('show')) {
     if (e.key === 'Escape') closeShop();
     return;
   }
@@ -1559,9 +1580,13 @@ document.addEventListener('keydown', (e) => {
   else if (key === 'r') waterAction();
   else if (key === 't') fertilizeAction();
   else if (key === ' ') { e.preventDefault(); togglePause(); }
-  else if (key >= '1' && key <= '5') {
-    const speeds = [1, 2, 4, 8, 16];
-    setSpeed(speeds[parseInt(key) - 1]);
+  else if (key === '[') { changeSpeed(-1); }
+  else if (key === ']') { changeSpeed(1); }
+  else if (key >= '1' && key <= '8') {
+    e.preventDefault();
+    game.selectedSlot = parseInt(key) - 1;
+    renderInventory();
+    renderStatus();
   }
 });
 
@@ -1785,6 +1810,13 @@ function setSpeed(s) {
   document.querySelectorAll('.speed-btn').forEach(btn => {
     btn.classList.toggle('active', parseInt(btn.dataset.speed) === s);
   });
+}
+
+function changeSpeed(dir) {
+  const speeds = [1, 2, 4, 8, 16];
+  const idx = speeds.indexOf(game.speed);
+  if (dir < 0 && idx > 0) setSpeed(speeds[idx - 1]);
+  else if (dir > 0 && idx < speeds.length - 1) setSpeed(speeds[idx + 1]);
 }
 
 function togglePause() {
