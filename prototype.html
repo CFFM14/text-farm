@@ -478,13 +478,14 @@
         <div class="row2">
           <span id="weather-display">☀ 晴</span>
           <span id="temp-display">🌡 24.5°C</span>
+          <span id="humidity-display">💧 45%</span>
         </div>
         <div id="speed-controls">
-          <button class="speed-btn active" data-speed="1">1x</button>
-          <button class="speed-btn" data-speed="2">2x</button>
-          <button class="speed-btn" data-speed="4">4x</button>
-          <button class="speed-btn" data-speed="8">8x</button>
-          <button class="speed-btn" data-speed="16">16x</button>
+          <button class="speed-btn active" data-speed="1">原速</button>
+          <button class="speed-btn" data-speed="180">3时/秒</button>
+          <button class="speed-btn" data-speed="1440">1天/秒</button>
+          <button class="speed-btn" data-speed="4320">3天/秒</button>
+          <button class="speed-btn" data-speed="10080">7天/秒</button>
           <button class="speed-btn" data-speed="0">⏸</button>
         </div>
       </div>
@@ -608,8 +609,8 @@ function farmSnapshot() {
 // ====== 游戏状态 ======
 const COLS = 30, ROWS = 16;
 const game = {
-  day: 1, season: '春', weather: { type:'晴', intensity:'温和', sunlight:'充足', cloud:10, wind:'微风', rain:0 },
-  temp: 22.5,
+  day: 1, season: '春', weather: { type:'晴', intensity:'温和', sunlight:'充足', cloud:10, wind:'微风', rain:0, humidity:45 },
+  temp: 22.5, humidity: 45,
   timeMin: 480, // 8:00
   speed: 1, paused: false,
   player: { x: 14, y: 8, money: 500, facing: 'right' },
@@ -1100,15 +1101,31 @@ function calcHealthCoef(tile) {
 // 更新土壤湿度（每日蒸发/回润）
 function updateMoisture(moisture, x, y) {
   const wDist = waterDistance(x, y);
-  // 蒸发：根据天气类型的降雨量和云量
   const w = game.weather;
-  if (w.rain > 0) moisture += w.rain * 0.3;
-  else if (w.cloud >= 80) moisture -= 3;
-  else if (w.cloud >= 40) moisture -= 5;
-  else moisture -= 7;
-  // 地下水位自然回润（临河地块）
-  if (wDist <= 3) moisture += 3;
-  return Math.max(3, Math.min(100, moisture));
+  const temp = parseFloat(game.temp);
+  const airHumidity = game.humidity || 50;
+
+  // === 降雨补水 ===
+  if (w.rain > 0) {
+    moisture += w.rain * 0.35;
+    return Math.min(100, moisture);
+  }
+
+  // === 蒸发：温度↑蒸发↑，风大蒸发↑，空气湿蒸发↓，云多蒸发↓ ===
+  let evap = 5;
+  evap += (temp - 20) * 0.2;
+  if (w.wind === '疾风' || w.wind === '大风') evap += 3;
+  else if (w.wind === '狂风' || w.wind === '暴风') evap += 5;
+  evap -= (airHumidity - 50) * 0.08;
+  evap -= (w.cloud - 10) * 0.03;
+  evap = Math.max(0.5, evap);
+  moisture -= evap;
+
+  // === 地下水回润 ===
+  if (wDist <= 1) moisture += 4;
+  else if (wDist <= 3) moisture += 2;
+
+  return Math.max(3, Math.min(100, Math.round(moisture)));
 }
 
 // ====== 构建地图 ======
@@ -1969,7 +1986,10 @@ function renderStatus() {
   const m = game.timeMin % 60;
   document.getElementById('time-display').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   document.getElementById('weather-display').textContent = `${weatherIcon(game.weather)} ${weatherLabel(game.weather)}`;
-  document.getElementById('temp-display').textContent = `🌡 ${game.temp}°C`;
+  const feels = feelsLike(game.temp, game.humidity);
+  const feelsStr = Math.abs(feels - game.temp) > 1.5 ? ` (体感${feels.toFixed(0)}°)` : '';
+  document.getElementById('temp-display').textContent = `🌡 ${game.temp}°C${feelsStr}`;
+  document.getElementById('humidity-display').textContent = `💧 ${game.humidity}%`;
   document.getElementById('money-display').textContent = `¥${game.player.money}`;
 }
 
@@ -2337,44 +2357,44 @@ const SEASON_TEMP = { '春':[10,25], '夏':[22,37], '秋':[12,26], '冬':[-3,12]
 // 天气类型概率表（按季节）
 const WEATHER_TABLE = {
   '春': [
-    { type:'晴',   intensity:'温和', sunlight:'充足', cloud:10, rain:0,  prob:35 },
-    { type:'晴',   intensity:'强',   sunlight:'强烈', cloud:5,  rain:0,  prob:10 },
-    { type:'薄晴', intensity:'弱',   sunlight:'一般', cloud:25, rain:0,  prob:10 },
-    { type:'多云', intensity:'—',   sunlight:'一般', cloud:60, rain:0,  prob:15 },
-    { type:'阴',   intensity:'—',   sunlight:'弱',   cloud:85, rain:0,  prob:10 },
-    { type:'小雨', intensity:'轻',   sunlight:'弱',   cloud:90, rain:8,  prob:12 },
-    { type:'中雨', intensity:'—',   sunlight:'极弱', cloud:95, rain:20, prob:6 },
-    { type:'雷阵雨',intensity:'强', sunlight:'极弱', cloud:100,rain:30, prob:2 },
+    { type:'晴',   intensity:'温和', sunlight:'充足', cloud:10, wind:'微风', rain:0,  humidity:45, prob:35 },
+    { type:'晴',   intensity:'强',   sunlight:'强烈', cloud:5,  wind:'轻风', rain:0,  humidity:35, prob:10 },
+    { type:'薄晴', intensity:'弱',   sunlight:'一般', cloud:25, wind:'微风', rain:0,  humidity:50, prob:10 },
+    { type:'多云', intensity:'—',   sunlight:'一般', cloud:60, wind:'和风', rain:0,  humidity:55, prob:15 },
+    { type:'阴',   intensity:'—',   sunlight:'弱',   cloud:85, wind:'轻风', rain:0,  humidity:65, prob:10 },
+    { type:'小雨', intensity:'轻',   sunlight:'弱',   cloud:90, wind:'微风', rain:8,  humidity:75, prob:12 },
+    { type:'中雨', intensity:'—',   sunlight:'极弱', cloud:95, wind:'和风', rain:20, humidity:85, prob:6  },
+    { type:'雷阵雨',intensity:'强', sunlight:'极弱', cloud:100,wind:'疾风', rain:30, humidity:90, prob:2  },
   ],
   '夏': [
-    { type:'晴',   intensity:'强',   sunlight:'强烈', cloud:5,  rain:0,  prob:25 },
-    { type:'晴',   intensity:'酷热', sunlight:'极强', cloud:3,  rain:0,  prob:15 },
-    { type:'多云', intensity:'—',   sunlight:'一般', cloud:50, rain:0,  prob:15 },
-    { type:'阴',   intensity:'闷',   sunlight:'弱',   cloud:80, rain:0,  prob:10 },
-    { type:'小雨', intensity:'轻',   sunlight:'弱',   cloud:85, rain:5,  prob:8 },
-    { type:'中雨', intensity:'—',   sunlight:'极弱', cloud:95, rain:18, prob:8 },
-    { type:'大雨', intensity:'强',   sunlight:'极弱', cloud:100,rain:35, prob:5 },
-    { type:'雷阵雨',intensity:'暴', sunlight:'极弱', cloud:100,rain:40, prob:8 },
-    { type:'台风',  intensity:'极',  sunlight:'无',   cloud:100,rain:60, prob:3 },
-    { type:'特大暴雨',intensity:'极',sunlight:'无',   cloud:100,rain:80, prob:3 },
+    { type:'晴',   intensity:'强',   sunlight:'强烈', cloud:5,  wind:'轻风', rain:0,  humidity:50, prob:25 },
+    { type:'晴',   intensity:'酷热', sunlight:'极强', cloud:3,  wind:'微风', rain:0,  humidity:40, prob:15 },
+    { type:'多云', intensity:'—',   sunlight:'一般', cloud:50, wind:'和风', rain:0,  humidity:60, prob:15 },
+    { type:'阴',   intensity:'闷',   sunlight:'弱',   cloud:80, wind:'微风', rain:0,  humidity:70, prob:10 },
+    { type:'小雨', intensity:'轻',   sunlight:'弱',   cloud:85, wind:'轻风', rain:5,  humidity:80, prob:8  },
+    { type:'中雨', intensity:'—',   sunlight:'极弱', cloud:95, wind:'和风', rain:18, humidity:88, prob:8  },
+    { type:'大雨', intensity:'强',   sunlight:'极弱', cloud:100,wind:'疾风', rain:35, humidity:92, prob:5  },
+    { type:'雷阵雨',intensity:'暴', sunlight:'极弱', cloud:100,wind:'大风', rain:40, humidity:95, prob:8  },
+    { type:'台风',  intensity:'极',  sunlight:'无',   cloud:100,wind:'狂风', rain:60, humidity:98, prob:3  },
+    { type:'特大暴雨',intensity:'极',sunlight:'无',   cloud:100,wind:'暴风', rain:80, humidity:100,prob:3  },
   ],
   '秋': [
-    { type:'晴',   intensity:'温和', sunlight:'充足', cloud:10, rain:0,  prob:30 },
-    { type:'薄晴', intensity:'弱',   sunlight:'一般', cloud:30, rain:0,  prob:15 },
-    { type:'多云', intensity:'—',   sunlight:'一般', cloud:55, rain:0,  prob:18 },
-    { type:'阴',   intensity:'—',   sunlight:'弱',   cloud:85, rain:0,  prob:15 },
-    { type:'小雨', intensity:'轻',   sunlight:'弱',   cloud:90, rain:6,  prob:12 },
-    { type:'中雨', intensity:'—',   sunlight:'极弱', cloud:95, rain:15, prob:7 },
-    { type:'大雨', intensity:'强',   sunlight:'极弱', cloud:100,rain:25, prob:3 },
+    { type:'晴',   intensity:'温和', sunlight:'充足', cloud:10, wind:'微风', rain:0,  humidity:40, prob:30 },
+    { type:'薄晴', intensity:'弱',   sunlight:'一般', cloud:30, wind:'轻风', rain:0,  humidity:48, prob:15 },
+    { type:'多云', intensity:'—',   sunlight:'一般', cloud:55, wind:'和风', rain:0,  humidity:55, prob:18 },
+    { type:'阴',   intensity:'—',   sunlight:'弱',   cloud:85, wind:'轻风', rain:0,  humidity:62, prob:15 },
+    { type:'小雨', intensity:'轻',   sunlight:'弱',   cloud:90, wind:'微风', rain:6,  humidity:72, prob:12 },
+    { type:'中雨', intensity:'—',   sunlight:'极弱', cloud:95, wind:'和风', rain:15, humidity:82, prob:7  },
+    { type:'大雨', intensity:'强',   sunlight:'极弱', cloud:100,wind:'疾风', rain:25, humidity:90, prob:3  },
   ],
   '冬': [
-    { type:'晴',   intensity:'弱',   sunlight:'一般', cloud:15, rain:0,  prob:30 },
-    { type:'薄晴', intensity:'弱',   sunlight:'弱',   cloud:40, rain:0,  prob:20 },
-    { type:'多云', intensity:'—',   sunlight:'弱',   cloud:65, rain:0,  prob:18 },
-    { type:'阴',   intensity:'冷',   sunlight:'极弱', cloud:90, rain:0,  prob:18 },
-    { type:'小雨', intensity:'冷',   sunlight:'极弱', cloud:95, rain:5,  prob:6 },
-    { type:'中雨', intensity:'冷',   sunlight:'无',   cloud:100,rain:12, prob:5 },
-    { type:'霜冻', intensity:'极寒', sunlight:'一般', cloud:5,  rain:0,  prob:3 },
+    { type:'晴',   intensity:'弱',   sunlight:'一般', cloud:15, wind:'轻风', rain:0,  humidity:30, prob:30 },
+    { type:'薄晴', intensity:'弱',   sunlight:'弱',   cloud:40, wind:'微风', rain:0,  humidity:38, prob:20 },
+    { type:'多云', intensity:'—',   sunlight:'弱',   cloud:65, wind:'和风', rain:0,  humidity:45, prob:18 },
+    { type:'阴',   intensity:'冷',   sunlight:'极弱', cloud:90, wind:'轻风', rain:0,  humidity:55, prob:18 },
+    { type:'小雨', intensity:'冷',   sunlight:'极弱', cloud:95, wind:'微风', rain:5,  humidity:65, prob:6  },
+    { type:'中雨', intensity:'冷',   sunlight:'无',   cloud:100,wind:'和风', rain:12, humidity:75, prob:5  },
+    { type:'霜冻', intensity:'极寒', sunlight:'一般', cloud:5,  wind:'轻风', rain:0,  humidity:25, prob:3  },
   ],
 };
 
@@ -2410,16 +2430,39 @@ function weatherLabel(w) {
   return label;
 }
 
-// 季节+时刻→气温
+// 气温受天气修正
 function calcTemp(hour, season) {
   const [lo, hi] = SEASON_TEMP[season] || [10, 25];
-  const mid = hour / 24 * Math.PI * 2;
-  // 模拟日温曲线：凌晨最冷(lo)，午后2点最热(hi)
   const amplitude = (hi - lo) / 2;
   const base = lo + amplitude;
-  const t = base + amplitude * Math.sin((hour - 8) / 24 * Math.PI * 2);
-  // 加微小随机扰动 ±1°C
-  return Math.round((t + (Math.random() - 0.5) * 2) * 10) / 10;
+  let t = base + amplitude * Math.sin((hour - 8) / 24 * Math.PI * 2);
+  // 天气修正：阴雨降温，晴天升温
+  const w = game.weather;
+  if (w.rain > 0) t -= w.rain * 0.08;       // 降雨降温
+  else if (w.cloud >= 80) t -= 2;             // 阴天偏凉
+  else if (w.cloud <= 10) t += 1.5;           // 晴天升温
+  // 随机扰动
+  t += (Math.random() - 0.5) * 2;
+  return Math.round(t * 10) / 10;
+}
+
+// 空气湿度：天气基础值 + 季节偏移 + 水体修正
+function calcHumidity() {
+  const w = game.weather;
+  let h = w.humidity || 50;
+  // 季节修正：夏季更湿（长江中下游梅雨），冬季更干
+  if (game.season === '夏') h += 5;
+  else if (game.season === '冬') h -= 5;
+  // 随机波动 ±3%
+  h += (Math.random() - 0.5) * 6;
+  return Math.round(Math.max(8, Math.min(100, h)));
+}
+
+// 体感温度（考虑湿度）：高湿+高温=闷热，低湿+低温=干冷
+function feelsLike(temp, humidity) {
+  if (temp > 25 && humidity > 60) return temp + (humidity - 60) * 0.08; // 闷热加成
+  if (temp < 5 && humidity < 40) return temp - (40 - humidity) * 0.05; // 干冷加成
+  return temp;
 }
 
 function advanceTime(minutes) {
@@ -2433,11 +2476,12 @@ function advanceTime(minutes) {
   }
   if (game.day !== prevDay) updateCropGrowth();
   const hour = game.timeMin / 60;
-  game.temp = calcTemp(hour, game.season);
-  // 每天凌晨重新roll天气（仅跨天时）
+  // 每天凌晨重新roll天气 + 计算湿度（仅跨天时）
   if (game.day !== prevDay || !game.weather) {
     game.weather = rollWeather(game.season);
+    game.humidity = calcHumidity();
   }
+  game.temp = calcTemp(hour, game.season);
 }
 
 function setSpeed(s) {
@@ -2449,7 +2493,7 @@ function setSpeed(s) {
 }
 
 function changeSpeed(dir) {
-  const speeds = [1, 2, 4, 8, 16];
+  const speeds = [1, 180, 1440, 4320, 10080];
   const idx = speeds.indexOf(game.speed);
   if (dir < 0 && idx > 0) setSpeed(speeds[idx - 1]);
   else if (dir > 0 && idx < speeds.length - 1) setSpeed(speeds[idx + 1]);
