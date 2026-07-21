@@ -307,6 +307,120 @@
     padding: 40px 0;
     line-height: 2;
   }
+
+  /* ===== 商店弹窗 ===== */
+  #shop-overlay {
+    display: none;
+    position: fixed;
+    inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.6);
+    align-items: center;
+    justify-content: center;
+  }
+  #shop-overlay.show { display: flex; }
+  #shop-modal {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    width: 620px; max-height: 520px;
+    display: flex; flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .shop-header {
+    display: flex; align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid #21262d;
+  }
+  .shop-header .shop-name { font-size:15px; font-weight:bold; color:#FFB300; flex:1; }
+  .shop-close {
+    background: none; border: none; color: #6e7681; font-size: 18px;
+    cursor: pointer; padding: 2px 8px; border-radius: 4px;
+  }
+  .shop-close:hover { color: #f85149; background: rgba(248,81,73,0.1); }
+
+  /* 标签 */
+  .shop-tabs {
+    display: flex; gap: 2px; padding: 8px 14px 0;
+    border-bottom: 1px solid #21262d;
+  }
+  .shop-tab {
+    background: none; border: none; color: #6e7681;
+    padding: 7px 16px; cursor: pointer; font-size: 13px;
+    font-family: inherit; border-radius: 6px 6px 0 0;
+    position: relative; transition: all 0.15s;
+  }
+  .shop-tab:hover { color: #c9d1d9; background: rgba(255,255,255,0.03); }
+  .shop-tab.active { color: #58a6ff; background: #0d1117; }
+  .shop-tab .badge {
+    position: absolute; top: -2px; right: -4px;
+    background: #f85149; color: #fff; font-size: 10px;
+    min-width: 16px; height: 16px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 4px;
+  }
+
+  /* 商品区 */
+  .shop-body { flex: 1; overflow-y: auto; padding: 12px 14px; min-height: 0; }
+  .shop-body::-webkit-scrollbar { width: 5px; }
+  .shop-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+  .shop-items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .shop-item-card {
+    background: #0d1117; border: 1px solid #21262d; border-radius: 6px;
+    padding: 12px 10px; text-align: center; cursor: default;
+    transition: border-color 0.15s;
+  }
+  .shop-item-card:hover { border-color: #30363d; }
+  .shop-item-card .item-icon { font-size: 28px; margin-bottom: 4px; }
+  .shop-item-card .item-name { font-size: 12px; color: #c9d1d9; margin-bottom: 3px; }
+  .shop-item-card .item-price { font-size: 11px; color: #3fb950; margin-bottom: 8px; }
+  .shop-item-card .item-btn {
+    background: #21262d; border: 1px solid #30363d; color: #8b949e;
+    padding: 3px 14px; border-radius: 4px; cursor: pointer;
+    font-size: 11px; font-family: inherit;
+    transition: all 0.15s;
+  }
+  .shop-item-card .item-btn:hover { background: #1f6feb; color: #fff; border-color: #388bfd; }
+
+  /* 购物车底部栏 */
+  #shop-cart-bar {
+    border-top: 1px solid #21262d; padding: 8px 14px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; min-height: 44px;
+  }
+  #shop-cart-bar .cart-label { color: #6e7681; white-space: nowrap; }
+  #shop-cart-bar .cart-items {
+    flex: 1; display: flex; gap: 6px; overflow-x: auto; flex-wrap: wrap;
+  }
+  .cart-item {
+    background: #21262d; border-radius: 4px; padding: 2px 6px;
+    display: flex; align-items: center; gap: 4px; white-space: nowrap;
+    font-size: 11px; color: #c9d1d9;
+  }
+  .cart-item .remove { color: #f85149; cursor: pointer; font-size: 13px; line-height: 1; }
+  .cart-total { color: #3fb950; font-weight: bold; white-space: nowrap; }
+  .cart-btn {
+    background: #21262d; border: 1px solid #30363d; color: #8b949e;
+    padding: 4px 12px; border-radius: 4px; cursor: pointer;
+    font-size: 11px; font-family: inherit; white-space: nowrap;
+  }
+  .cart-btn.primary { background: #238636; border-color: #2ea043; color: #fff; }
+  .cart-btn.primary:hover { background: #2ea043; }
+  .cart-btn:hover { border-color: #58a6ff; }
+
+  /* 售卖区 */
+  .sell-item-row {
+    background: #0d1117; border: 1px solid #21262d; border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 6px;
+    display: flex; align-items: center; gap: 10px;
+    cursor: pointer; transition: border-color 0.15s;
+  }
+  .sell-item-row:hover { border-color: #3fb950; }
+  .sell-item-row .sell-icon { font-size: 20px; }
+  .sell-item-row .sell-name { flex:1; font-size: 13px; color: #c9d1d9; }
+  .sell-item-row .sell-info { text-align: right; }
+  .sell-item-row .sell-info .sell-count { font-size: 11px; color: #6e7681; }
+  .sell-item-row .sell-info .sell-price { font-size: 12px; color: #3fb950; }
+  .sell-empty { text-align: center; color: #484f58; padding: 30px 0; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -351,9 +465,34 @@
     <div id="controls-hint">
       <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 移动 &nbsp;
       <kbd>F</kbd> 互动 &nbsp;
+      <kbd>R</kbd> 浇水 &nbsp;
+      <kbd>T</kbd> 施肥 &nbsp;
       <kbd>点击</kbd> 查看 &nbsp;
-      <kbd>1</kbd>~<kbd>5</kbd> 调速 &nbsp;
-      <kbd>空格</kbd> 暂停
+      <kbd>1</kbd>~<kbd>5</kbd> 调速
+    </div>
+  </div>
+</div>
+
+<!-- 商店弹窗 -->
+<div id="shop-overlay">
+  <div id="shop-modal">
+    <div class="shop-header">
+      <span class="shop-name">乡间小卖部</span>
+      <button class="shop-close" onclick="closeShop()">✕</button>
+    </div>
+    <div class="shop-tabs" id="shop-tabs">
+      <button class="shop-tab active" data-tab="农具">农具</button>
+      <button class="shop-tab" data-tab="肥料">肥料</button>
+      <button class="shop-tab" data-tab="种子">种子</button>
+      <button class="shop-tab" data-tab="售卖">售卖</button>
+    </div>
+    <div class="shop-body" id="shop-body"></div>
+    <div id="shop-cart-bar">
+      <span class="cart-label">购物车</span>
+      <div class="cart-items" id="cart-items-display"></div>
+      <span class="cart-total" id="cart-total">¥0</span>
+      <button class="cart-btn" onclick="clearCart()">清空</button>
+      <button class="cart-btn primary" onclick="checkout()">结算</button>
     </div>
   </div>
 </div>
@@ -367,10 +506,11 @@ const game = {
   speed: 1, paused: false,
   player: { x: 15, y: 8, satiety: 80, money: 500, facing: 'right' },
   selected: null,
+  shopCart: [],
   inventory: [
-    { name: '水稻种子', icon: '种', count: 12, color: '#8BC34A' },
-    { name: '胡萝卜种子', icon: '种', count: 8, color: '#FF7043' },
-    { name: '水桶', icon: '桶', count: 1, color: '#42a5f5' },
+    { id:'rice_seed', name:'水稻种子', icon:'种', count:12, color:'#8BC34A' },
+    { id:'carrot_seed', name:'胡萝卜种子', icon:'种', count:8, color:'#FF7043' },
+    { id:'bucket', name:'水桶', icon:'桶', count:1, color:'#42a5f5' },
     null, null, null, null, null
   ],
   map: []
@@ -406,6 +546,113 @@ const TERRAIN = [
   [5,5,5,5,5,2,2,2,2,2,5,5,5,5,5,5,5,5,5,5,5,4,4,4,4,3,3,3,3,4],
   [5,5,5,5,5,5,2,2,2,2,2,5,5,5,5,5,5,5,5,5,5,5,5,4,4,4,3,3,3,3],
 ];
+
+// ====== 商店商品 ======
+const SHOP_ITEMS = [
+  { id:'bucket', name:'水桶', icon:'桶', price:20, category:'农具', sellPrice:10, color:'#42a5f5' },
+  { id:'hoe', name:'锄头', icon:'锄', price:30, category:'农具', sellPrice:15, color:'#78909C' },
+  { id:'sickle', name:'镰刀', icon:'镰', price:25, category:'农具', sellPrice:12, color:'#B0BEC5' },
+  { id:'basic_fert', name:'普通肥料', icon:'肥', price:8, category:'肥料', sellPrice:4, color:'#d29922' },
+  { id:'good_fert', name:'优质肥料', icon:'肥', price:15, category:'肥料', sellPrice:8, color:'#db6d28' },
+  { id:'npk_fert', name:'NPK复合肥', icon:'肥', price:20, category:'肥料', sellPrice:10, color:'#f0883e' },
+  { id:'rice_seed', name:'水稻种子', icon:'种', price:5, category:'种子', sellPrice:3, color:'#8BC34A' },
+  { id:'carrot_seed', name:'胡萝卜种子', icon:'种', price:3, category:'种子', sellPrice:2, color:'#FF7043' },
+  { id:'wheat_seed', name:'小麦种子', icon:'种', price:4, category:'种子', sellPrice:2, color:'#C8B560' },
+];
+
+// ====== 作物生长定义 ======
+const CROP_GROWTH = {
+  rice: {
+    char:'稻', name:'水稻', field:'水田',
+    total:90, sellPrice:25, yieldBase:120,
+    stages: [
+      { name:'芽期', max:7, cls:'c-crop-s' },
+      { name:'苗期', max:25, cls:'c-crop-s' },
+      { name:'分蘖期', max:45, cls:'c-crop-g' },
+      { name:'拔节期', max:60, cls:'c-crop-g' },
+      { name:'抽穗期', max:75, cls:'c-crop-g' },
+      { name:'成熟期', max:90, cls:'c-crop-m' },
+    ]
+  },
+  carrot: {
+    char:'萝', name:'胡萝卜', field:'旱田',
+    total:70, sellPrice:18, yieldBase:100,
+    stages: [
+      { name:'发芽期', max:5, cls:'c-crop-s' },
+      { name:'幼苗期', max:15, cls:'c-crop-s' },
+      { name:'叶丛期', max:35, cls:'c-crop-g' },
+      { name:'肉质根膨大期', max:55, cls:'c-crop-g' },
+      { name:'成熟期', max:70, cls:'c-crop-m' },
+    ]
+  },
+  wheat: {
+    char:'麦', name:'小麦', field:'旱田',
+    total:120, sellPrice:22, yieldBase:150,
+    stages: [
+      { name:'出苗期', max:7, cls:'c-wheat-s' },
+      { name:'分蘖期', max:30, cls:'c-wheat-s' },
+      { name:'拔节期', max:55, cls:'c-wheat-g' },
+      { name:'抽穗期', max:75, cls:'c-wheat-g' },
+      { name:'灌浆期', max:100, cls:'c-wheat-g' },
+      { name:'成熟期', max:120, cls:'c-wheat-m' },
+    ]
+  },
+};
+
+// ====== 背包辅助函数 ======
+function addToInventory(newItem) {
+  // 先尝试堆叠到同名同id物品
+  for (let i = 0; i < 8; i++) {
+    const slot = game.inventory[i];
+    if (slot && slot.id === newItem.id) {
+      slot.count += newItem.count;
+      return true;
+    }
+  }
+  // 找空位
+  for (let i = 0; i < 8; i++) {
+    if (!game.inventory[i]) {
+      game.inventory[i] = { ...newItem };
+      return true;
+    }
+  }
+  return false; // 背包满
+}
+
+function removeFromInventory(slotIdx, count) {
+  const item = game.inventory[slotIdx];
+  if (!item || count <= 0) return false;
+  item.count -= count;
+  if (item.count <= 0) game.inventory[slotIdx] = null;
+  return true;
+}
+
+function findInInventory(id) {
+  for (let i = 0; i < 8; i++) {
+    if (game.inventory[i] && game.inventory[i].id === id) return { slotIdx:i, item:game.inventory[i] };
+  }
+  return null;
+}
+
+function hasItem(id) {
+  return findInInventory(id) !== null;
+}
+
+function hasAnyFertilizer() {
+  for (let i = 0; i < 8; i++) {
+    const item = game.inventory[i];
+    if (item && item.id && item.id.endsWith('_fert')) return { slotIdx:i, item };
+  }
+  return null;
+}
+
+function hasAnySeed() {
+  for (let i = 0; i < 8; i++) {
+    const item = game.inventory[i];
+    if (item && item.id && item.id.endsWith('_seed')) return { slotIdx:i, item };
+  }
+  return null;
+}
 
 // ====== 表面物定义 ======
 // 稀疏表：'x,y' → { type, char, colorClass, data... }
@@ -453,65 +700,66 @@ function surfaceAt(x, y, terrain) {
 }
 
 // ====== 表面物工厂 ======
-function makeCrop(x, y, cropType) {
-  const stages = {
-    rice: [
-      { name:'芽期', days:7, total:90, cls:'c-crop-s' },
-      { name:'苗期', days:25, total:90, cls:'c-crop-s' },
-      { name:'分蘖期', days:45, total:90, cls:'c-crop-g' },
-      { name:'拔节期', days:60, total:90, cls:'c-crop-g' },
-      { name:'抽穗期', days:75, total:90, cls:'c-crop-g' },
-      { name:'成熟期', days:88, total:90, cls:'c-crop-m' },
-    ],
-    carrot: [
-      { name:'发芽期', days:5, total:70, cls:'c-crop-s' },
-      { name:'幼苗期', days:15, total:70, cls:'c-crop-s' },
-      { name:'叶丛期', days:35, total:70, cls:'c-crop-g' },
-      { name:'肉质根膨大期', days:55, total:70, cls:'c-crop-g' },
-      { name:'成熟期', days:68, total:70, cls:'c-crop-m' },
-    ],
-    wheat: [
-      { name:'出苗期', days:7, total:120, cls:'c-wheat-s' },
-      { name:'分蘖期', days:30, total:120, cls:'c-wheat-s' },
-      { name:'拔节期', days:55, total:120, cls:'c-wheat-g' },
-      { name:'抽穗期', days:75, total:120, cls:'c-wheat-g' },
-      { name:'灌浆期', days:100, total:120, cls:'c-wheat-g' },
-      { name:'成熟期', days:118, total:120, cls:'c-wheat-m' },
-    ],
-  };
-  const chars = { rice:'稻', carrot:'萝', wheat:'麦' };
-  const names = { rice:'水稻', carrot:'胡萝卜', wheat:'小麦' };
-  const varieties = { rice:'籼稻', carrot:'红芯七寸', wheat:'冬麦' };
-  const fields = { rice:'水田', carrot:'旱田', wheat:'旱田' };
-
-  const stageList = stages[cropType];
-  const idx = ((x + y * 3) % stageList.length);
-  const st = stageList[idx];
-
+function makeCrop(x, y, cropType, growthDays) {
+  // growthDays 可选参数，指定当前生长天数；不传则随机分配阶段
+  const cg = CROP_GROWTH[cropType];
+  if (!cg) return null;
+  let gd;
+  if (growthDays !== undefined) {
+    gd = growthDays;
+  } else {
+    // 随机分配生长阶段：在每个阶段的max范围内随机
+    const stageWeights = cg.stages.map((s, i) => i === 0 ? s.max : s.max - cg.stages[i-1].max);
+    const totalWeight = cg.total;
+    const roll = Math.random() * totalWeight;
+    let acc = 0;
+    gd = 0;
+    for (let i = 0; i < stageWeights.length; i++) {
+      acc += stageWeights[i];
+      if (roll <= acc) {
+        gd = (i === 0 ? 0 : cg.stages[i-1].max) + Math.random() * stageWeights[i];
+        break;
+      }
+    }
+  }
+  const currentStage = getCropStage(cropType, gd);
   return {
-    type: 'crop', char: chars[cropType], colorClass: st.cls,
+    type: 'crop', char: cg.char, colorClass: currentStage.cls,
     data: {
-      cropName: names[cropType], variety: varieties[cropType], field: fields[cropType],
-      stage: st.name, stageIdx: idx, growthDays: st.days, totalDays: st.total,
+      cropType, cropName:cg.name, field:cg.field,
+      stage: currentStage.name, growthDays:gd, totalDays:cg.total,
       temperature: (20 + Math.random() * 8).toFixed(1),
       humidity: 50 + Math.floor(Math.random() * 35),
       sunlight: ['充足','充足','一般'][Math.floor(Math.random()*3)],
-      soilType: fields[cropType],
       soilMoisture: 40 + Math.floor(Math.random() * 50),
       nitrogen: 30 + Math.floor(Math.random() * 60),
       phosphorus: 20 + Math.floor(Math.random() * 50),
       potassium: 15 + Math.floor(Math.random() * 55),
       fertility: '中等', aeration: '良好',
       pH: (5.5 + Math.random() * 1.5).toFixed(1),
-      pests: idx === 2 ? '轻度虫害' : '无',
+      pests: gd > cg.total * 0.4 ? '轻度虫害' : '无',
       disease: '无',
-      weeds: idx === 4 ? '少量' : '无',
+      weeds: gd > cg.total * 0.6 ? '少量' : '无',
       health: 75 + Math.floor(Math.random() * 24),
-      harvestDate: `第${st.total - st.days + game.day}天`,
-      yield: (100 + Math.floor(Math.random() * 300)) + 'kg',
+      yield: (cg.yieldBase + Math.floor(Math.random() * 100)) + 'kg',
       quality: '良好',
     }
   };
+}
+
+// 根据生长天数获取当前阶段
+function getCropStage(cropType, growthDays) {
+  const cg = CROP_GROWTH[cropType];
+  for (const st of cg.stages) {
+    if (growthDays < st.max) return st;
+  }
+  return cg.stages[cg.stages.length - 1]; // 成熟
+}
+
+// 判断作物是否成熟
+function isCropMature(cropType, growthDays) {
+  const cg = CROP_GROWTH[cropType];
+  return growthDays >= cg.total;
 }
 
 function makeTree(x, y) {
@@ -631,7 +879,23 @@ function buildMap() {
       else if (tName === '山地' && !surface) walkable = false;
       else if (surface && (surface.type === 'tree' || surface.type === 'rock')) walkable = false;
       else walkable = true; // crops, grass, shops, houses, empty plains/hills/basin/plateau
-      row.push({ terrain: tName, terrainDef: tDef, surface, type, data, walkable });
+
+      const tile = { terrain: tName, terrainDef: tDef, surface, type, data, walkable };
+
+      // 初始作物：存入 planted 动态数据
+      if (surface && surface.type === 'crop' && data.cropType) {
+        tile.planted = {
+          cropType: data.cropType,
+          plantedDay: game.day - Math.floor(data.growthDays),
+          growthDays: data.growthDays,
+          watered: false,
+          fertilized: false
+        };
+      } else {
+        tile.planted = null;
+      }
+
+      row.push(tile);
     }
     map.push(row);
   }
@@ -787,29 +1051,44 @@ function nutrientBar(label, value, max) {
 
 function renderCropDetail(tile, x, y) {
   const d = tile.data;
+  const p = tile.planted;
+  const cg = CROP_GROWTH[d.cropType];
   const growthPct = ((d.growthDays / d.totalDays) * 100).toFixed(1);
-  const qualityStr = typeof d.quality === 'function' ? d.quality(d.health) : d.quality;
   const healthCls = d.health > 80 ? 'good' : d.health > 60 ? 'warn' : 'bad';
   const pestCls = d.pests === '无' ? 'good' : 'warn';
   const diseaseCls = d.disease === '无' ? 'good' : 'warn';
   const weedCls = d.weeds === '无' ? 'good' : d.weeds === '少量' ? 'warn' : 'bad';
+  const remainingDays = Math.max(0, Math.ceil(d.totalDays - d.growthDays));
+  const waterCls = p && p.watered ? 'good' : 'warn';
+  const fertCls = p && p.fertilized ? 'good' : '';
+  const yieldAmount = p && p.fertilized ? Math.floor(cg.yieldBase * 1.3) : cg.yieldBase;
+
+  let growthBarCls = 'fill-green';
+  if (growthPct >= 100) growthBarCls = 'fill-yellow';
 
   return `
     <div class="section">
       <div class="section-title">作物详情</div>
       <div class="info-row"><span class="info-label">坐标</span><span class="info-value">(${x}, ${y})</span></div>
-      <div class="info-row"><span class="info-label">作物</span><span class="info-value">${d.cropName} [${d.variety}]</span></div>
+      <div class="info-row"><span class="info-label">作物</span><span class="info-value">${d.cropName}</span></div>
       <div class="info-row"><span class="info-label">田地类型</span><span class="info-value">${d.field}</span></div>
       <div class="info-row"><span class="info-label">生长阶段</span><span class="info-value" style="color:#58a6ff;font-weight:bold">${d.stage}</span></div>
+      ${remainingDays > 0 ? `<div class="info-row"><span class="info-label">距成熟</span><span class="info-value" style="color:#d29922">约 ${remainingDays} 天</span></div>` : `<div class="info-row"><span class="info-label">状态</span><span class="info-value good">已成熟，可按 F 收获</span></div>`}
     </div>
 
     <div class="section">
       <div class="section-title">生长进度</div>
       <div class="bar-row">
         <span class="bar-label">进度</span>
-        <div class="bar-bg"><div class="bar-fill fill-green" style="width:${growthPct}%"></div></div>
-        <span class="bar-text">${d.growthDays}/${d.totalDays}天 (${growthPct}%)</span>
+        <div class="bar-bg"><div class="bar-fill ${growthBarCls}" style="width:${Math.min(100, growthPct)}%"></div></div>
+        <span class="bar-text">${Math.floor(d.growthDays)}/${d.totalDays}天 (${growthPct}%)</span>
       </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">照料状态</div>
+      <div class="info-row"><span class="info-label">今日浇水</span><span class="info-value ${waterCls}">${p && p.watered ? '✅ 已浇水' : '❌ 未浇水'}</span></div>
+      <div class="info-row"><span class="info-label">施肥</span><span class="info-value ${fertCls}">${p && p.fertilized ? '✅ 已施肥 (+30%产量)' : '未施肥'}</span></div>
     </div>
 
     <div class="section">
@@ -846,9 +1125,9 @@ function renderCropDetail(tile, x, y) {
 
     <div class="section">
       <div class="section-title">预测</div>
-      <div class="info-row"><span class="info-label">预计收获</span><span class="info-value">${d.harvestDate}</span></div>
-      <div class="info-row"><span class="info-label">预计产量</span><span class="info-value">${d.yield}</span></div>
-      <div class="info-row"><span class="info-label">品质预估</span><span class="info-value good">${qualityStr}</span></div>
+      <div class="info-row"><span class="info-label">距收获</span><span class="info-value">约 ${remainingDays} 天</span></div>
+      <div class="info-row"><span class="info-label">预计产量</span><span class="info-value">${yieldAmount}kg</span></div>
+      <div class="info-row"><span class="info-label">品质预估</span><span class="info-value good">${d.quality}</span></div>
     </div>
   `;
 }
@@ -1065,17 +1344,189 @@ function renderInventory() {
       count++;
       slot.className = 'inv-slot';
       slot.innerHTML = `<span style="color:${item.color}">${item.icon}</span><span class="count">${item.count}</span>`;
-      slot.title = item.name;
+      slot.title = `${item.name} ×${item.count}`;
+      slot.dataset.slotIdx = i;
+      // 售卖模式下点击可卖
+      slot.addEventListener('click', () => {
+        const overlay = document.getElementById('shop-overlay');
+        if (overlay && overlay.style.display === 'flex') sellItem(i);
+      });
     } else {
       slot.className = 'inv-slot empty';
       slot.textContent = '·';
     }
     inv.appendChild(slot);
   }
-  // 更新背包计数标签
   const label = document.querySelector('#inventory-area .inv-label');
   if (label) label.textContent = `背包 (${count}/8)`;
 }
+
+// ====== 商店系统 ======
+function openShop() {
+  const overlay = document.getElementById('shop-overlay');
+  overlay.classList.add('show');
+  switchShopTab('农具');
+  renderCartBar();
+}
+
+function closeShop() {
+  document.getElementById('shop-overlay').classList.remove('show');
+}
+
+function switchShopTab(category) {
+  document.querySelectorAll('.shop-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === category);
+  });
+  if (category === '售卖') {
+    renderSellTab();
+  } else {
+    renderShopTab(category);
+  }
+}
+
+function renderShopTab(category) {
+  const body = document.getElementById('shop-body');
+  const items = SHOP_ITEMS.filter(it => it.category === category);
+  body.innerHTML = `<div class="shop-items">${items.map(it => `
+    <div class="shop-item-card">
+      <div class="item-icon" style="color:${it.color}">${it.icon}</div>
+      <div class="item-name">${it.name}</div>
+      <div class="item-price">¥${it.price}</div>
+      <button class="item-btn" onclick="addToCartById('${it.id}')">+ 加入购物车</button>
+    </div>
+  `).join('')}</div>`;
+}
+
+function addToCartById(id) {
+  const item = SHOP_ITEMS.find(it => it.id === id);
+  if (!item) return;
+  const existing = game.shopCart.find(c => c.id === id);
+  if (existing) { existing.qty++; }
+  else { game.shopCart.push({ ...item, qty: 1 }); }
+  renderCartBar();
+  updateCartBadge();
+}
+
+function removeFromCart(idx) {
+  game.shopCart.splice(idx, 1);
+  renderCartBar();
+  updateCartBadge();
+}
+
+function clearCart() {
+  game.shopCart = [];
+  renderCartBar();
+  updateCartBadge();
+}
+
+function checkout() {
+  if (game.shopCart.length === 0) return;
+  const total = game.shopCart.reduce((s, c) => s + c.price * c.qty, 0);
+  if (game.player.money < total) {
+    const body = document.getElementById('shop-body');
+    body.innerHTML = '<div class="sell-empty" style="color:#f85149;">金钱不足！还差 ¥' + (total - game.player.money) + '</div>';
+    return;
+  }
+  game.player.money -= total;
+  for (const ci of game.shopCart) {
+    const added = addToInventory({ id:ci.id, name:ci.name, icon:ci.icon, count:ci.qty, color:ci.color });
+    if (!added) { alert('背包已满，部分物品未能放入！'); break; }
+  }
+  game.shopCart = [];
+  renderCartBar();
+  updateCartBadge();
+  renderStatus();
+  renderInventory();
+  const activeTab = document.querySelector('.shop-tab.active');
+  if (activeTab && activeTab.dataset.tab !== '售卖') renderShopTab(activeTab.dataset.tab);
+}
+
+function renderCartBar() {
+  const display = document.getElementById('cart-items-display');
+  const totalEl = document.getElementById('cart-total');
+  if (game.shopCart.length === 0) {
+    display.innerHTML = '<span style="color:#484f58;font-size:11px;">空空如也</span>';
+    totalEl.textContent = '¥0';
+  } else {
+    display.innerHTML = game.shopCart.map((c, i) => `
+      <span class="cart-item">${c.icon}${c.name}×${c.qty} <span class="remove" onclick="removeFromCart(${i})">✕</span></span>
+    `).join('');
+    const total = game.shopCart.reduce((s, c) => s + c.price * c.qty, 0);
+    totalEl.textContent = `¥${total}`;
+  }
+}
+
+function updateCartBadge() {
+  const qty = game.shopCart.reduce((s, c) => s + c.qty, 0);
+  let badge = document.querySelector('.shop-tab .badge');
+  if (qty > 0) {
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'badge';
+      document.querySelector('.shop-tabs').appendChild(badge);
+    }
+    badge.textContent = qty;
+    badge.style.display = '';
+  } else if (badge) {
+    badge.style.display = 'none';
+  }
+}
+
+function renderSellTab() {
+  const body = document.getElementById('shop-body');
+  const sellable = [];
+  for (let i = 0; i < 8; i++) {
+    const item = game.inventory[i];
+    if (!item) continue;
+    const shopItem = SHOP_ITEMS.find(s => s.id === item.id);
+    if (shopItem) {
+      sellable.push({ slotIdx:i, ...item, sellPrice:shopItem.sellPrice });
+    } else if (item.id && item.id.endsWith('_crop')) {
+      const cropType = item.id.replace('_crop','');
+      const cg = CROP_GROWTH[cropType];
+      if (cg) sellable.push({ slotIdx:i, ...item, sellPrice:cg.sellPrice });
+    }
+  }
+  if (sellable.length === 0) {
+    body.innerHTML = '<div class="sell-empty">背包中没有可售卖的物品<br>收获作物或购买多余物品后可在此出售</div>';
+    return;
+  }
+  body.innerHTML = sellable.map(s => `
+    <div class="sell-item-row" onclick="sellItem(${s.slotIdx})">
+      <span class="sell-icon" style="color:${s.color}">${s.icon}</span>
+      <span class="sell-name">${s.name}</span>
+      <span class="sell-info">
+        <div class="sell-count">×${s.count}</div>
+        <div class="sell-price">¥${s.sellPrice}/个</div>
+      </span>
+    </div>
+  `).join('');
+}
+
+function sellItem(slotIdx) {
+  const item = game.inventory[slotIdx];
+  if (!item) return;
+  let price = 0;
+  const shopItem = SHOP_ITEMS.find(s => s.id === item.id);
+  if (shopItem) price = shopItem.sellPrice;
+  else if (item.id && item.id.endsWith('_crop')) {
+    const cropType = item.id.replace('_crop','');
+    const cg = CROP_GROWTH[cropType];
+    if (cg) price = cg.sellPrice;
+  }
+  if (price <= 0) return;
+  game.player.money += price;
+  removeFromInventory(slotIdx, 1);
+  renderStatus();
+  renderInventory();
+  renderSellTab();
+}
+
+// 标签点击委托
+document.addEventListener('click', (e) => {
+  const tab = e.target.closest('.shop-tab');
+  if (tab) switchShopTab(tab.dataset.tab);
+});
 
 function renderStatus() {
   document.getElementById('day-display').textContent = `第${game.day}天 · ${game.season}`;
@@ -1093,12 +1544,20 @@ function renderStatus() {
 
 // ====== 输入处理 ======
 document.addEventListener('keydown', (e) => {
+  // 商店打开时不处理移动
+  const overlay = document.getElementById('shop-overlay');
+  if (overlay && overlay.classList.contains('show')) {
+    if (e.key === 'Escape') closeShop();
+    return;
+  }
   const key = e.key.toLowerCase();
   if (key === 'w') movePlayer(0, -1);
   else if (key === 's') movePlayer(0, 1);
   else if (key === 'a') movePlayer(-1, 0);
   else if (key === 'd') movePlayer(1, 0);
   else if (key === 'f') interact();
+  else if (key === 'r') waterAction();
+  else if (key === 't') fertilizeAction();
   else if (key === ' ') { e.preventDefault(); togglePause(); }
   else if (key >= '1' && key <= '5') {
     const speeds = [1, 2, 4, 8, 16];
@@ -1126,29 +1585,48 @@ function interact() {
   const tile = game.map[game.player.y][game.player.x];
   const detailPanel = document.getElementById('detail-panel');
 
-  if (tile.type === 'field') {
-    // 种植
-    if (game.inventory[0] && game.inventory[0].name.includes('种子')) {
-      detailPanel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌱 已在此处播种${game.inventory[0].name}<br>需定期浇水</div>`;
-      advanceTime(10);
+  if (tile.type === 'shop') {
+    openShop();
+    return;
+  }
+
+  if (tile.type === 'crop' || (tile.planted && tile.planted.cropType)) {
+    // 站在作物上 → 检查是否成熟
+    const p = tile.planted;
+    if (isCropMature(p.cropType, p.growthDays)) {
+      harvestCrop(game.player.x, game.player.y);
+    } else {
+      const stage = getCropStage(p.cropType, p.growthDays);
+      detailPanel.innerHTML = `<div class="empty-msg" style="color:#d29922">🌱 作物尚未成熟<br>当前阶段：${stage.name}<br>还需约 ${CROP_GROWTH[p.cropType].total - p.growthDays} 天<br><br>按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">R</kbd> 浇水 &nbsp; <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;">T</kbd> 施肥</div>`;
+    }
+  } else if (tile.type === 'field') {
+    // 空地 → 播种
+    const seed = hasAnySeed();
+    if (seed) {
+      plantSeed(game.player.x, game.player.y, seed);
     } else {
       detailPanel.innerHTML = `<div class="empty-msg" style="color:#f85149">背包中没有种子！<br>请去商店购买</div>`;
     }
   } else if (tile.type === 'water') {
     detailPanel.innerHTML = `<div class="empty-msg" style="color:#42a5f5">🪣 水桶已装满水！<br>可以去浇灌作物了</div>`;
     advanceTime(5);
-  } else if (tile.type === 'shop') {
-    detailPanel.innerHTML = `<div class="empty-msg" style="color:#FFB300">🏪 欢迎光临 乡间小卖部<br><br>商品列表：<br>· 水稻种子 ¥5/包<br>· 胡萝卜种子 ¥3/包<br>· 小麦种子 ¥4/包<br>· 水桶 ¥20<br>· 锄头 ¥30<br>· 普通肥料 ¥8<br><br>(商店系统待完善)</div>`;
-    advanceTime(5);
   } else if (tile.type === 'grass') {
     detailPanel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌾 已开垦荒地为田地！<br>肥力较低，需施肥改良</div>`;
+    // 将荒地转为田地
+    tile.type = 'field';
+    tile.surface = null;
+    tile.walkable = true;
+    tile.data = terrainData(tile.terrain, game.player.x, game.player.y);
     advanceTime(30);
+    renderMap();
   } else if (tile.type === 'house') {
     if (game.timeMin >= 1080 || game.timeMin < 360) {
       detailPanel.innerHTML = `<div class="empty-msg" style="color:#8b949e">💤 休息中...<br>跳过到第二天早上</div>`;
+      const prevDay = game.day;
       game.day++;
       game.timeMin = 360;
       game.player.satiety = Math.min(100, game.player.satiety + 20);
+      if (game.day !== prevDay) updateCropGrowth();
       renderStatus();
     } else {
       detailPanel.innerHTML = `<div class="empty-msg" style="color:#d29922">现在是白天，无法休息<br>夜晚 (18:00后) 才能睡觉</div>`;
@@ -1160,16 +1638,143 @@ function interact() {
   renderStatus();
 }
 
+// ====== 种植/浇水/施肥/收获 ======
+function plantSeed(x, y, seedInfo) {
+  const tile = game.map[y][x];
+  const seedId = seedInfo.item.id;
+  const cropType = seedId.replace('_seed', '');
+  const cg = CROP_GROWTH[cropType];
+  if (!cg) return;
+
+  removeFromInventory(seedInfo.slotIdx, 1);
+  tile.planted = { cropType, plantedDay: game.day, growthDays: 0, watered: false, fertilized: false };
+  tile.type = 'crop';
+  tile.surface = { type:'crop', char:cg.char, colorClass:cg.stages[0].cls, data:{ cropType } };
+  // 初始化简化data用于详情面板
+  tile.data = {
+    cropType, cropName:cg.name, field:cg.field,
+    stage:cg.stages[0].name, growthDays:0, totalDays:cg.total,
+    temperature: game.temp, humidity: 50, sunlight: '充足',
+    soilMoisture: 50, nitrogen:30, phosphorus:20, potassium:25,
+    fertility:'中等', aeration:'良好', pH:'6.5',
+    pests:'无', disease:'无', weeds:'无', health:90,
+    yield: cg.yieldBase + 'kg', quality:'良好',
+  };
+  const panel = document.getElementById('detail-panel');
+  panel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌱 已播种 ${cg.name}！<br>记得按 <kbd style="background:#21262d;border:1px solid #30363d;padding:1px 5px;border-radius:3px;color:#8b949e;">R</kbd> 浇水加速生长</div>`;
+  renderMap();
+  renderInventory();
+  advanceTime(10);
+}
+
+function waterAction() {
+  const tile = game.map[game.player.y][game.player.x];
+  if (!tile.planted || !tile.planted.cropType) return;
+  if (!hasItem('bucket')) {
+    const panel = document.getElementById('detail-panel');
+    panel.innerHTML = `<div class="empty-msg" style="color:#f85149">没有水桶！<br>请去商店购买</div>`;
+    return;
+  }
+  if (tile.planted.watered) {
+    const panel = document.getElementById('detail-panel');
+    panel.innerHTML = `<div class="empty-msg" style="color:#8b949e">今天已经浇过水了<br>明天再来吧</div>`;
+    return;
+  }
+  tile.planted.watered = true;
+  const panel = document.getElementById('detail-panel');
+  panel.innerHTML = `<div class="empty-msg" style="color:#42a5f5">💧 已浇水！<br>今日生长速度 ×1.5</div>`;
+  advanceTime(5);
+}
+
+function fertilizeAction() {
+  const tile = game.map[game.player.y][game.player.x];
+  if (!tile.planted || !tile.planted.cropType) return;
+  if (tile.planted.fertilized) {
+    const panel = document.getElementById('detail-panel');
+    panel.innerHTML = `<div class="empty-msg" style="color:#8b949e">本阶段已施过肥<br>无需重复施肥</div>`;
+    return;
+  }
+  const fert = hasAnyFertilizer();
+  if (!fert) {
+    const panel = document.getElementById('detail-panel');
+    panel.innerHTML = `<div class="empty-msg" style="color:#f85149">背包中没有肥料！<br>请去商店购买</div>`;
+    return;
+  }
+  removeFromInventory(fert.slotIdx, 1);
+  tile.planted.fertilized = true;
+  const panel = document.getElementById('detail-panel');
+  panel.innerHTML = `<div class="empty-msg" style="color:#d29922">🧪 已施 ${fert.item.name}！<br>预计增产 30%</div>`;
+  renderInventory();
+  advanceTime(10);
+}
+
+function harvestCrop(x, y) {
+  const tile = game.map[y][x];
+  const p = tile.planted;
+  if (!p) return;
+  const cg = CROP_GROWTH[p.cropType];
+  const baseYield = cg.yieldBase;
+  const yieldAmount = p.fertilized ? Math.floor(baseYield * 1.3) : baseYield;
+  const cropId = p.cropType + '_crop';
+
+  const added = addToInventory({ id:cropId, name:cg.name, icon:cg.char, count:1, color:'#FFD700' });
+  if (!added) {
+    const panel = document.getElementById('detail-panel');
+    panel.innerHTML = `<div class="empty-msg" style="color:#f85149">背包已满！<br>请先清理背包再来收获</div>`;
+    return;
+  }
+
+  // 清除作物
+  tile.planted = null;
+  tile.type = 'field';
+  tile.surface = null;
+  tile.data = terrainData(tile.terrain, x, y);
+
+  const panel = document.getElementById('detail-panel');
+  panel.innerHTML = `<div class="empty-msg" style="color:#3fb950">🌾 收获完成！<br>${cg.name} ${yieldAmount}kg<br>已放入背包</div>`;
+  renderMap();
+  renderInventory();
+  advanceTime(20);
+}
+
+// ====== 每日作物生长 ======
+let lastGrowthDay = 0;
+function updateCropGrowth() {
+  if (game.day === lastGrowthDay) return;
+  lastGrowthDay = game.day;
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const tile = game.map[y][x];
+      if (!tile.planted || !tile.planted.cropType) continue;
+      const p = tile.planted;
+      // 浇水的加速
+      p.growthDays += p.watered ? 1.5 : 1;
+      // 每天重置浇水状态
+      p.watered = false;
+      // 更新表面显示颜色
+      const stage = getCropStage(p.cropType, p.growthDays);
+      if (tile.surface) tile.surface.colorClass = stage.cls;
+      // 更新data中的阶段信息
+      if (tile.data) {
+        tile.data.stage = stage.name;
+        tile.data.growthDays = p.growthDays;
+      }
+    }
+  }
+  renderMap();
+  if (game.selected) renderDetail(game.selected.x, game.selected.y);
+}
+
 function advanceTime(minutes) {
+  const prevDay = game.day;
   game.timeMin += minutes;
   while (game.timeMin >= 1440) {
     game.timeMin -= 1440;
     game.day++;
-    // 换季 (简化: 每30天换季)
     const seasons = ['春', '夏', '秋', '冬'];
     game.season = seasons[Math.floor((game.day - 1) / 30) % 4];
   }
-  // 温度随时间变化
+  if (game.day !== prevDay) updateCropGrowth();
   const hour = game.timeMin / 60;
   game.temp = (20 + 8 * Math.sin((hour - 6) / 24 * Math.PI * 2)).toFixed(1);
 }
