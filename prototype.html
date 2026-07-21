@@ -603,13 +603,14 @@ function farmSnapshot() {
     }
   }
   if (!crops) crops = '（暂无作物）\n';
-  return `第${game.day}天，${game.season}季，${game.weather}，气温${game.temp}°C。背包金钱¥${game.player.money}。\n作物列表：\n${crops}`;
+  return `第${game.day}天，${game.season}季，${weatherLabel(game.weather)}，气温${game.temp}°C。背包金钱¥${game.player.money}。\n作物列表：\n${crops}`;
 }
 
 // ====== 游戏状态 ======
 const COLS = 30, ROWS = 16;
 const game = {
-  day: 1, season: '春', weather: '晴', temp: 24.5,
+  day: 1, season: '春', weather: { type:'晴', intensity:'温和', sunlight:'充足', cloud:10, wind:'微风', rain:0 },
+  temp: 22.5,
   timeMin: 480, // 8:00
   speed: 1, paused: false,
   player: { x: 14, y: 8, satiety: 80, money: 500, facing: 'right' },
@@ -1100,10 +1101,12 @@ function calcHealthCoef(tile) {
 // 更新土壤湿度（每日蒸发/回润）
 function updateMoisture(moisture, x, y) {
   const wDist = waterDistance(x, y);
-  // 蒸发
-  if (game.weather === '雨') moisture += 15;
-  else if (game.weather === '阴') moisture -= 4;
-  else moisture -= 8; // 晴
+  // 蒸发：根据天气类型的降雨量和云量
+  const w = game.weather;
+  if (w.rain > 0) moisture += w.rain * 0.3;
+  else if (w.cloud >= 80) moisture -= 3;
+  else if (w.cloud >= 40) moisture -= 5;
+  else moisture -= 7;
   // 地下水位自然回润（临河地块）
   if (wDist <= 3) moisture += 3;
   return Math.max(3, Math.min(100, moisture));
@@ -1972,7 +1975,7 @@ function renderStatus() {
   const h = Math.floor(game.timeMin / 60);
   const m = game.timeMin % 60;
   document.getElementById('time-display').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-  document.getElementById('weather-display').textContent = `☀ ${game.weather}`;
+  document.getElementById('weather-display').textContent = `${weatherIcon(game.weather)} ${weatherLabel(game.weather)}`;
   document.getElementById('temp-display').textContent = `🌡 ${game.temp}°C`;
   document.getElementById('satiety-display').textContent = `${game.player.satiety}%`;
   document.getElementById('money-display').textContent = `¥${game.player.money}`;
@@ -2341,6 +2344,97 @@ function updateCropGrowth() {
   if (game.selected) renderDetail(game.selected.x, game.selected.y);
 }
 
+// ====== 天气系统 ======
+// 各季节气温范围
+const SEASON_TEMP = { '春':[10,25], '夏':[22,37], '秋':[12,26], '冬':[-3,12] };
+// 天气类型概率表（按季节）
+const WEATHER_TABLE = {
+  '春': [
+    { type:'晴',   intensity:'温和', sunlight:'充足', cloud:10, rain:0,  prob:35 },
+    { type:'晴',   intensity:'强',   sunlight:'强烈', cloud:5,  rain:0,  prob:10 },
+    { type:'薄晴', intensity:'弱',   sunlight:'一般', cloud:25, rain:0,  prob:10 },
+    { type:'多云', intensity:'—',   sunlight:'一般', cloud:60, rain:0,  prob:15 },
+    { type:'阴',   intensity:'—',   sunlight:'弱',   cloud:85, rain:0,  prob:10 },
+    { type:'小雨', intensity:'轻',   sunlight:'弱',   cloud:90, rain:8,  prob:12 },
+    { type:'中雨', intensity:'—',   sunlight:'极弱', cloud:95, rain:20, prob:6 },
+    { type:'雷阵雨',intensity:'强', sunlight:'极弱', cloud:100,rain:30, prob:2 },
+  ],
+  '夏': [
+    { type:'晴',   intensity:'强',   sunlight:'强烈', cloud:5,  rain:0,  prob:25 },
+    { type:'晴',   intensity:'酷热', sunlight:'极强', cloud:3,  rain:0,  prob:15 },
+    { type:'多云', intensity:'—',   sunlight:'一般', cloud:50, rain:0,  prob:15 },
+    { type:'阴',   intensity:'闷',   sunlight:'弱',   cloud:80, rain:0,  prob:10 },
+    { type:'小雨', intensity:'轻',   sunlight:'弱',   cloud:85, rain:5,  prob:8 },
+    { type:'中雨', intensity:'—',   sunlight:'极弱', cloud:95, rain:18, prob:8 },
+    { type:'大雨', intensity:'强',   sunlight:'极弱', cloud:100,rain:35, prob:5 },
+    { type:'雷阵雨',intensity:'暴', sunlight:'极弱', cloud:100,rain:40, prob:8 },
+    { type:'台风',  intensity:'极',  sunlight:'无',   cloud:100,rain:60, prob:3 },
+    { type:'特大暴雨',intensity:'极',sunlight:'无',   cloud:100,rain:80, prob:3 },
+  ],
+  '秋': [
+    { type:'晴',   intensity:'温和', sunlight:'充足', cloud:10, rain:0,  prob:30 },
+    { type:'薄晴', intensity:'弱',   sunlight:'一般', cloud:30, rain:0,  prob:15 },
+    { type:'多云', intensity:'—',   sunlight:'一般', cloud:55, rain:0,  prob:18 },
+    { type:'阴',   intensity:'—',   sunlight:'弱',   cloud:85, rain:0,  prob:15 },
+    { type:'小雨', intensity:'轻',   sunlight:'弱',   cloud:90, rain:6,  prob:12 },
+    { type:'中雨', intensity:'—',   sunlight:'极弱', cloud:95, rain:15, prob:7 },
+    { type:'大雨', intensity:'强',   sunlight:'极弱', cloud:100,rain:25, prob:3 },
+  ],
+  '冬': [
+    { type:'晴',   intensity:'弱',   sunlight:'一般', cloud:15, rain:0,  prob:30 },
+    { type:'薄晴', intensity:'弱',   sunlight:'弱',   cloud:40, rain:0,  prob:20 },
+    { type:'多云', intensity:'—',   sunlight:'弱',   cloud:65, rain:0,  prob:18 },
+    { type:'阴',   intensity:'冷',   sunlight:'极弱', cloud:90, rain:0,  prob:18 },
+    { type:'小雨', intensity:'冷',   sunlight:'极弱', cloud:95, rain:5,  prob:6 },
+    { type:'中雨', intensity:'冷',   sunlight:'无',   cloud:100,rain:12, prob:5 },
+    { type:'霜冻', intensity:'极寒', sunlight:'一般', cloud:5,  rain:0,  prob:3 },
+  ],
+};
+
+function rollWeather(season) {
+  const table = WEATHER_TABLE[season] || WEATHER_TABLE['春'];
+  const total = table.reduce((s, w) => s + w.prob, 0);
+  let roll = Math.random() * total;
+  for (const w of table) {
+    roll -= w.prob;
+    if (roll <= 0) return { ...w };
+  }
+  return { ...table[0] };
+}
+
+function weatherIcon(w) {
+  if (w.type === '台风') return '🌀';
+  if (w.type === '特大暴雨') return '🌊';
+  if (w.type === '雷阵雨') return '⛈';
+  if (w.type === '大雨') return '🌧';
+  if (w.type === '中雨') return '🌧';
+  if (w.type === '小雨') return '🌦';
+  if (w.type === '毛毛雨') return '🌦';
+  if (w.type === '霜冻') return '❄';
+  if (w.type === '阴') return '☁';
+  if (w.type === '多云') return '⛅';
+  if (w.type === '薄晴') return '🌤';
+  return '☀';
+}
+
+function weatherLabel(w) {
+  let label = w.type;
+  if (w.intensity && w.intensity !== '—') label += '·' + w.intensity;
+  return label;
+}
+
+// 季节+时刻→气温
+function calcTemp(hour, season) {
+  const [lo, hi] = SEASON_TEMP[season] || [10, 25];
+  const mid = hour / 24 * Math.PI * 2;
+  // 模拟日温曲线：凌晨最冷(lo)，午后2点最热(hi)
+  const amplitude = (hi - lo) / 2;
+  const base = lo + amplitude;
+  const t = base + amplitude * Math.sin((hour - 8) / 24 * Math.PI * 2);
+  // 加微小随机扰动 ±1°C
+  return Math.round((t + (Math.random() - 0.5) * 2) * 10) / 10;
+}
+
 function advanceTime(minutes) {
   const prevDay = game.day;
   game.timeMin += minutes;
@@ -2352,7 +2446,11 @@ function advanceTime(minutes) {
   }
   if (game.day !== prevDay) updateCropGrowth();
   const hour = game.timeMin / 60;
-  game.temp = (20 + 8 * Math.sin((hour - 6) / 24 * Math.PI * 2)).toFixed(1);
+  game.temp = calcTemp(hour, game.season);
+  // 每天凌晨重新roll天气（仅跨天时）
+  if (game.day !== prevDay || !game.weather) {
+    game.weather = rollWeather(game.season);
+  }
 }
 
 function setSpeed(s) {
