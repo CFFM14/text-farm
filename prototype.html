@@ -90,7 +90,6 @@
   .bg-farshore { background: rgba(60,60,60,0.10); }     /* 河对岸 — 灰暗 */
   .bg-riverbank { background: rgba(180,160,120,0.06); } /* 河滩 — 沙质淡黄 */
   .bg-tilled    { background: rgba(100,80,50,0.08); }    /* 翻耕地 — 土色加深 */
-  .tile.flooded { background: rgba(33,150,243,0.15) !important; } /* 洪水淹没 */
   /* 表面物也保留背景微调 */
   .bg-crop    { background: rgba(76,175,80,0.06); }
   .bg-tree    { background: rgba(27,94,32,0.10); }
@@ -624,7 +623,7 @@ function farmSnapshot() {
 const COLS = 30, ROWS = 16;
 const game = {
   day: 1, season: '春', weather: { type:'晴', intensity:'温和', sunlight:'充足', cloud:10, wind:'微风', rain:0, humidity:45 },
-  temp: 22.5, humidity: 45, riverLevel: 100,
+  temp: 22.5, humidity: 45,
   timeMin: 480, // 8:00
   speed: 1, paused: false,
   player: { x: 14, y: 8, money: 500, facing: 'right' },
@@ -643,13 +642,12 @@ const game = {
 // ====== 地形定义 ======
 // 长江中下游平原某地区：河流从左下蜿蜒至中上流出，左上方为河对岸
 // 0=水域, 1=平原(水稻土/潮土), 2=丘陵(黄棕壤), 3=河对岸(未探索)
-const T_NAMES = ['水域','平原','丘陵','对岸','河床'];
+const T_NAMES = ['水域','平原','丘陵','对岸'];
 const T_DEFS = {
   '水域': { char:'水', bg:'bg-water' },
   '平原': { char:'', bg:'bg-plain' },
   '丘陵': { char:'', bg:'bg-hill' },
   '对岸': { char:'', bg:'bg-farshore' },
-  '河床': { char:'', bg:'bg-riverbank' },
 };
 
 // 地形生成：河流从左下(0,11~13)蜿蜒至右上(12~14,0)流出屏幕
@@ -733,65 +731,11 @@ const TERRAIN = (() => {
   return arr;
 })();
 
-// 河流深度分级：根据4邻域水域数标记每格的"深度"
-// depth 3: 核心（≥3水邻居）→ 永不断流
-// depth 2: 主河道（2水邻居）→ 极枯才露
-// depth 1: 边缘（1水邻居）→ 枯水先露
-// depth 0: 孤立（0水邻居）→ 稍降就露
-const RIVER_DEPTH = (() => {
-  const arr = Array.from({length: ROWS}, () => Array(COLS).fill(-1));
-  for (let y = 0; y < ROWS; y++) {
-    for (let x = 0; x < COLS; x++) {
-      if (TERRAIN[y][x] !== 0) continue;
-      let wCount = 0;
-      for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
-        const nx = x + dx, ny = y + dy;
-        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && TERRAIN[ny][nx] === 0) wCount++;
-      }
-      arr[y][x] = wCount;
-    }
-  }
-  return arr;
-})();
-
-// 河流水位阈值映射：depth → 露出所需的最低 riverLevel
-// depth 3 → 0（永不露出），depth 2 → 15，depth 1 → 40，depth 0 → 60
-const DRY_THRESHOLD = [60, 40, 15, 0];
-
-// 水域格在当前水位下是否还是水（false=露出为河床）
-function isWaterTile(x, y) {
-  const d = RIVER_DEPTH[y][x];
-  if (d < 0) return false; // 本来就不是水域
-  return game.riverLevel > DRY_THRESHOLD[d];
-}
-
-// 当前季节+水位 → 有效地形索引
-function currentTerrainIdx(y, x) {
-  const base = TERRAIN[y][x];
-  if (base === 0 && !isWaterTile(x, y)) return 4; // 水域但水位不够 → 河床
-  return base;
-}
-
-// 预计算水距缓存（水位变化时清除）
-let _wDistCache = {};
+// 预计算水距缓存
+const _wDistCache = {};
 function waterDistance(x, y) {
   const k = `${x},${y}`;
   if (_wDistCache[k] !== undefined) return _wDistCache[k];
-  let min = 50;
-  for (let dy = -12; dy <= 12; dy++) {
-    for (let dx = -12; dx <= 12; dx++) {
-      const nx = x + dx, ny = y + dy;
-      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && currentTerrainIdx(ny, nx) === 0) {
-        min = Math.min(min, Math.abs(dx) + Math.abs(dy));
-      }
-    }
-  }
-  _wDistCache[k] = min;
-  return min;
-}
-
-// 计算到最近水域的距离（曼哈顿距离）
-function waterDistance(x, y) {
   let min = 50;
   for (let dy = -12; dy <= 12; dy++) {
     for (let dx = -12; dx <= 12; dx++) {
@@ -801,6 +745,7 @@ function waterDistance(x, y) {
       }
     }
   }
+  _wDistCache[k] = min;
   return min;
 }
 
@@ -1245,21 +1190,6 @@ function terrainData(name, x, y) {
     slope: 0,
     blocked: true
   };
-  if (name === '河床') return {
-    soilType: '枯水河床（沙泥混合）',
-    moisture: Math.round(35 + Math.random() * 20),
-    nitrogen: Math.round(5 + Math.random() * 8),
-    phosphorus: Math.round(2 + Math.random() * 3),
-    potassium: Math.round(10 + Math.random() * 10),
-    fertility: '贫瘠',
-    aeration: '良好',
-    pH: (6.5 + Math.random() * 1.5).toFixed(1),
-    temp: (21 + (game.season==='夏'?5:game.season==='冬'?-8:0) + ((x+y)%6)).toFixed(1),
-    elevation: elevationFor(name, x, y),
-    slope: slopeFor(name, x, y),
-    isRiverbank: true,
-    note: '丰水期被水淹没，枯水期露出。沙泥混合，偶有芦苇。'
-  };
 
   const dist = waterDistance(x, y);
 
@@ -1354,7 +1284,7 @@ function buildMap() {
   for (let y = 0; y < ROWS; y++) {
     const row = [];
     for (let x = 0; x < COLS; x++) {
-      const tName = T_NAMES[currentTerrainIdx(y, x)];
+      const tName = T_NAMES[TERRAIN[y][x]];
       const tDef = T_DEFS[tName];
       const surface = surfaceAt(x, y, tName);
 
@@ -1421,7 +1351,7 @@ game.map = buildMap();
 function waterFlowAngle(x, y) {
   function isW(ix, iy) {
     if (ix < 0 || ix >= COLS || iy < 0 || iy >= ROWS) return false;
-    return isWaterTile(ix, iy);
+    return TERRAIN[iy][ix] === 0; // 0=水域
   }
   const n  = isW(x, y-1), s  = isW(x, y+1), e  = isW(x+1, y), w  = isW(x-1, y);
   const ne = isW(x+1, y-1), se = isW(x+1, y+1), sw = isW(x-1, y+1), nw = isW(x-1, y-1);
@@ -1474,10 +1404,6 @@ function renderMap() {
           div.className = `tile ${bgCls} ${colorCls}`;
         }
         div.style.opacity = '0.5';
-      } else if (tile.terrain === '河床') {
-        colorCls = '';
-        char = '';
-        div.className = `tile bg-riverbank`; // 枯水河床 = 河滩色
       } else {
         // 其他纯地形格：翻耕地背景加深，普通地淡色水印
         colorCls = '';
@@ -1489,7 +1415,6 @@ function renderMap() {
       div.dataset.x = x;
       div.dataset.y = y;
 
-      if (tile._flooded) div.classList.add('flooded');
       if (game.selected && game.selected.x === x && game.selected.y === y) {
         div.classList.add('selected');
       }
@@ -2600,46 +2525,6 @@ function advanceTime(minutes) {
     game.day++;
     const seasons = ['春', '夏', '秋', '冬'];
     game.season = seasons[Math.floor((game.day - 1) / 91) % 4];
-  }
-  // 每天更新河流水位 + 刷新地形 + 河漫滩洪水
-  if (game.day !== prevDay) {
-    const rainToday = game.weather ? game.weather.rain : 0;
-    const seasonTrend = { '春':0.15, '夏':0.4, '秋':-0.2, '冬':-0.5 }[game.season] || 0;
-    game.riverLevel = Math.max(20, Math.min(100, game.riverLevel + seasonTrend + rainToday * 0.25));
-    _wDistCache = {};
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        const tIdx = currentTerrainIdx(y, x);
-        const tName = T_NAMES[tIdx];
-        const tile = game.map[y][x];
-        const oldTerrain = tile.terrain;
-        tile.terrain = tName;
-        tile.terrainDef = T_DEFS[tName];
-        // 水域↔河床切换时更新 type 和 walkable
-        if (tName === '水域' && oldTerrain !== '水域') {
-          tile.type = 'water'; tile.walkable = false;
-        } else if (tName === '河床' && oldTerrain !== '河床') {
-          tile.type = 'field'; tile.walkable = true;
-          if (!tile.planted) tile.data = terrainData(tName, x, y);
-        } else if (oldTerrain === '河床' && tName === '水域') {
-          tile.type = 'water'; tile.walkable = false;
-        }
-      }
-    }
-    // 河漫滩洪水：riverLevel≥95 且暴雨/台风时，水边1格平原临时变水域
-    const flood = game.riverLevel >= 95 && (game.weather.type === '台风' || game.weather.type === '特大暴雨' || game.weather.type === '大雨');
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        const tile = game.map[y][x];
-        const isOnFirstTerrace = tile.terrain === '平原' && !tile.surface && waterDistance(x, y) === 1;
-        tile._flooded = flood && isOnFirstTerrace;
-        if (tile._flooded) {
-          tile.walkable = false;
-          tile.data.floodNote = '河漫滩洪水淹没';
-        }
-      }
-    }
-    renderMap();
   }
   if (game.day !== prevDay || !game.weather) {
     game.weather = rollWeather(game.season);
